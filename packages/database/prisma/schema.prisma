@@ -1,0 +1,223 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model NguoiDung {
+  maNguoiDung  String    @id @default(uuid()) @db.Uuid @map("maNguoiDung")
+  hoTen        String    @db.VarChar(150) @map("hoTen")
+  email        String    @unique @db.VarChar(150)
+  soDienThoai  String?   @unique @db.VarChar(20) @map("soDienThoai")
+  matKhau      String    @map("matKhau")
+  anhDaiDien   String?   @map("anhDaiDien")
+  ngaySinh     DateTime? @db.Date @map("ngaySinh")
+  gioiTinh     String?   @db.VarChar(20) @map("gioiTinh")
+  trangThai    String    @default("HoatDong") @db.VarChar(30) @map("trangThai")
+  ngayTao      DateTime  @default(now()) @map("ngayTao")
+  ngayCapNhat  DateTime  @default(now()) @map("ngayCapNhat")
+
+  @@map("nguoidung")
+}
+
+model VaiTro {
+  maVaiTro String  @id @default(uuid()) @db.Uuid @map("maVaiTro")
+  tenVaiTro String @unique @db.VarChar(50) @map("tenVaiTro")
+  moTa      String? @map("moTa")
+
+  @@map("vaitro")
+}
+
+model NguoiDungVaiTro {
+  maNguoiDung String   @db.Uuid @map("maNguoiDung")
+  maVaiTro    String   @db.Uuid @map("maVaiTro")
+  ngayGan     DateTime @default(now()) @map("ngayGan")
+
+  @@id([maNguoiDung, maVaiTro])
+  @@map("nguoidung_vaitro")
+}
+
+model HoSoHocVien {
+  maHoSoHocVien String    @id @default(uuid()) @db.Uuid @map("maHoSoHocVien")
+  maNguoiDung   String    @unique @db.Uuid @map("maNguoiDung")
+  trinhDoHienTai String?  @db.VarChar(50) @map("trinhDoHienTai")
+  mucTieuHocTap String?   @map("mucTieuHocTap")
+  tongDiem      Int       @default(0) @map("tongDiem")
+  chuoiNgayHoc  Int       @default(0) @map("chuoiNgayHoc")
+  ngayBatDauHoc DateTime? @map("ngayBatDauHoc")
+
+  @@map("hosohocvien")
+}
+
+model LoTrinhHoc {
+  maLoTrinh  String   @id @default(uuid()) @db.Uuid @map("maLoTrinh")
+  tenLoTrinh String   @db.VarChar(200) @map("tenLoTrinh")
+  moTa       String?  @map("moTa")
+  capDo      String?  @db.VarChar(50) @map("capDo")
+  doiTuong   String?  @db.VarChar(100) @map("doiTuong")
+  trangThai  String   @default("Nhap") @db.VarChar(30) @map("trangThai")
+  maNguoiTao String?  @db.Uuid @map("maNguoiTao")
+  ngayTao    DateTime @default(now()) @map("ngayTao")
+  ngayCapNhat DateTime @default(now()) @map("ngayCapNhat")
+
+  @@map("lotrinhhoc")
+}
+
+model GiaiDoanHoc {
+  maGiaiDoan  String  @id @default(uuid()) @db.Uuid @map("maGiaiDoan")
+  maLoTrinh   String  @db.Uuid @map("maLoTrinh")
+  tenGiaiDoan String  @db.VarChar(200) @map("tenGiaiDoan")
+  loaiGiaiDoan String @db.VarChar(50) @map("loaiGiaiDoan")
+  thuTu       Int     @map("thuTu")
+  moTa        String? @map("moTa")
+
+  @@unique([maLoTrinh, thuTu])
+  @@map("giaidoanhoc")
+}
+
+model ChuDeHoc {
+  maChuDe   String  @id @default(uuid()) @db.Uuid @map("maChuDe")
+  tenChuDe  String  @db.VarChar(200) @map("tenChuDe")
+  moTa      String? @map("moTa")
+  capDo     String? @db.VarChar(50) @map("capDo")
+  kyNang    String? @db.VarChar(50) @map("kyNang")
+  trangThai String  @default("HoatDong") @db.VarChar(30) @map("trangThai")
+
+  @@map("chudehoc")
+}
+
+model BaiHoc {
+  maBaiHoc       String   @id @default(uuid()) @db.Uuid @map("maBaiHoc")
+  maGiaiDoan     String?  @db.Uuid @map("maGiaiDoan")
+  maChuDe        String?  @db.Uuid @map("maChuDe")
+  tieuDe         String   @db.VarChar(255) @map("tieuDe")
+  moTa           String?  @map("moTa")
+  noiDung        String?  @map("noiDung")
+  capDo          String?  @db.VarChar(50) @map("capDo")
+  thuTu          Int      @map("thuTu")
+  diemDatYeuCau  Decimal  @default(80) @db.Decimal(5, 2) @map("diemDatYeuCau")
+  trangThai      String   @default("Nhap") @db.VarChar(30) @map("trangThai")
+  maNguoiTao     String?  @db.Uuid @map("maNguoiTao")
+  ngayTao        DateTime @default(now()) @map("ngayTao")
+  ngayCapNhat    DateTime @default(now()) @map("ngayCapNhat")
+
+  @@map("baihoc")
+}
+
+model NhiemVuHocTap {
+  maNhiemVu   String  @id @default(uuid()) @db.Uuid @map("maNhiemVu")
+  maBaiHoc    String  @db.Uuid @map("maBaiHoc")
+  tieuDe      String  @db.VarChar(255) @map("tieuDe")
+  huongDan    String? @map("huongDan")
+  loaiNhiemVu String  @db.VarChar(50) @map("loaiNhiemVu")
+  batBuoc     Boolean @default(true) @map("batBuoc")
+  thuTu       Int     @map("thuTu")
+  trangThai   String  @default("HoatDong") @db.VarChar(30) @map("trangThai")
+
+  @@unique([maBaiHoc, thuTu])
+  @@map("nhiemvuhoctap")
+}
+
+model TuVung {
+  maTuVung     String  @id @default(uuid()) @db.Uuid @map("maTuVung")
+  maBaiHoc     String  @db.Uuid @map("maBaiHoc")
+  tu           String  @db.VarChar(100)
+  nghia        String
+  phienAm      String? @db.VarChar(100) @map("phienAm")
+  loaiTu       String? @db.VarChar(50) @map("loaiTu")
+  viDu         String? @map("viDu")
+  nghiaViDu    String? @map("nghiaViDu")
+  audioPhatAm  String? @map("audioPhatAm")
+  hinhAnh      String? @map("hinhAnh")
+
+  @@map("tuvung")
+}
+
+model NguPhap {
+  maNguPhap String  @id @default(uuid()) @db.Uuid @map("maNguPhap")
+  maBaiHoc  String  @db.Uuid @map("maBaiHoc")
+  tieuDe    String  @db.VarChar(255) @map("tieuDe")
+  cauTruc   String? @map("cauTruc")
+  giaiThich String? @map("giaiThich")
+  viDu      String? @map("viDu")
+  ghiChu    String? @map("ghiChu")
+
+  @@map("nguphap")
+}
+
+model BaiKiemTra {
+  maBaiKiemTra   String   @id @default(uuid()) @db.Uuid @map("maBaiKiemTra")
+  maBaiHoc       String   @db.Uuid @map("maBaiHoc")
+  tieuDe         String   @db.VarChar(255) @map("tieuDe")
+  moTa           String?  @map("moTa")
+  loaiBaiKiemTra String   @db.VarChar(50) @map("loaiBaiKiemTra")
+  thoiGianLamBai Int?     @map("thoiGianLamBai")
+  diemDatYeuCau  Decimal  @default(80) @db.Decimal(5, 2) @map("diemDatYeuCau")
+  soLanLamToiDa  Int?     @map("soLanLamToiDa")
+  trangThai      String   @default("Nhap") @db.VarChar(30) @map("trangThai")
+  ngayTao        DateTime @default(now()) @map("ngayTao")
+
+  @@map("baikiemtra")
+}
+
+model CauHoi {
+  maCauHoi       String  @id @default(uuid()) @db.Uuid @map("maCauHoi")
+  maBaiKiemTra   String  @db.Uuid @map("maBaiKiemTra")
+  noiDung        String  @map("noiDung")
+  loaiCauHoi     String  @db.VarChar(50) @map("loaiCauHoi")
+  diem           Decimal @db.Decimal(5, 2)
+  doKho          String? @db.VarChar(30) @map("doKho")
+  giaiThichDapAn String? @map("giaiThichDapAn")
+  audio          String?
+  hinhAnh        String? @map("hinhAnh")
+  thuTu          Int     @map("thuTu")
+
+  @@unique([maBaiKiemTra, thuTu])
+  @@map("cauhoi")
+}
+
+model DapAn {
+  maDapAn     String  @id @default(uuid()) @db.Uuid @map("maDapAn")
+  maCauHoi    String  @db.Uuid @map("maCauHoi")
+  noiDung     String  @map("noiDung")
+  laDapAnDung Boolean @default(false) @map("laDapAnDung")
+  thuTu       Int     @map("thuTu")
+
+  @@unique([maCauHoi, thuTu])
+  @@map("dapan")
+}
+
+model LanLamBai {
+  maLanLam       String    @id @default(uuid()) @db.Uuid @map("maLanLam")
+  maBaiKiemTra   String    @db.Uuid @map("maBaiKiemTra")
+  maHocVien      String    @db.Uuid @map("maHocVien")
+  thoiGianBatDau DateTime  @default(now()) @map("thoiGianBatDau")
+  thoiGianNopBai DateTime? @map("thoiGianNopBai")
+  diemSo         Decimal   @default(0) @db.Decimal(5, 2) @map("diemSo")
+  soCauDung      Int       @default(0) @map("soCauDung")
+  soCauSai       Int       @default(0) @map("soCauSai")
+  phanTramDung   Decimal   @default(0) @db.Decimal(5, 2) @map("phanTramDung")
+  trangThai      String    @default("DangLam") @db.VarChar(30) @map("trangThai")
+  lanThu         Int       @map("lanThu")
+
+  @@unique([maBaiKiemTra, maHocVien, lanThu])
+  @@map("lanlambai")
+}
+
+model TienTrinhHocTap {
+  maTienTrinh       String    @id @default(uuid()) @db.Uuid @map("maTienTrinh")
+  maHocVien         String    @db.Uuid @map("maHocVien")
+  maBaiHoc          String    @db.Uuid @map("maBaiHoc")
+  trangThai         String    @default("ChuaHoc") @db.VarChar(30) @map("trangThai")
+  phanTramHoanThanh Decimal   @default(0) @db.Decimal(5, 2) @map("phanTramHoanThanh")
+  diemCaoNhat       Decimal   @default(0) @db.Decimal(5, 2) @map("diemCaoNhat")
+  ngayBatDau        DateTime? @map("ngayBatDau")
+  ngayHoanThanh     DateTime? @map("ngayHoanThanh")
+  ngayCapNhat       DateTime  @default(now()) @map("ngayCapNhat")
+
+  @@unique([maHocVien, maBaiHoc])
+  @@map("tientrinhhoctap")
+}
