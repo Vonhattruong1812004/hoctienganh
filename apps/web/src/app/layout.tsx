@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Script from 'next/script';
+import { ZooAmbientLayer } from '../components/zoo-ambient-layer';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -27,6 +28,7 @@ export default function RootLayout({
             } catch (error) {}
           })();
         `}</Script>
+        <ZooAmbientLayer />
         {children}
       </body>
     </html>

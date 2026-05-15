@@ -6,19 +6,23 @@ import {
   BookOpen,
   CheckCircle2,
   ClipboardCheck,
+  Clock3,
   Filter,
   GraduationCap,
+  Mail,
   Search,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
   Target,
   TrendingUp,
+  UserCheck,
+  UserX,
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState, type CSSProperties, type ComponentType } from 'react';
 import { USER_ROLES } from '@english-learning/shared';
 import { AppShell } from '../../components/app-shell';
 import { ApiError, apiGet, apiPatch, apiPost } from '../../lib/api';
@@ -65,6 +69,31 @@ type TeacherSupportSuggestion = {
   bestScore: number;
 };
 
+type AdminAccount = {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string | null;
+  avatar: string | null;
+  birthDate: string | null;
+  gender: string | null;
+  status: 'HoatDong' | 'BiKhoa' | 'NgungHoatDong';
+  createdAt: string;
+  updatedAt: string;
+  roles: string[];
+  studentCount: number;
+  linkedParentCount: number;
+  totalPoints: number;
+  streak: number;
+  avgProgress: number;
+  lastQuizAt: string | null;
+  activeLessons: number;
+  lockedLessons: number;
+  publishedPaths: number;
+  publishedLessons: number;
+  publishedQuizzes: number;
+};
+
 const filterOptions = [
   { key: 'all', label: 'Tất cả', description: 'Hiển thị toàn bộ học viên đã liên kết' },
   { key: 'needs-support', label: 'Cần hỗ trợ', description: 'Nhóm có tiến độ thấp hoặc bài bị khóa nhiều' },
@@ -84,17 +113,37 @@ const supportStatusFilters = [
   { key: 'HoanThanh', label: 'Hoàn tất' },
 ] as const;
 
+const adminRoleFilters = [
+  { key: 'all', label: 'Tất cả vai trò' },
+  { key: 'HocVien', label: 'Học viên' },
+  { key: 'PhuHuynh', label: 'Phụ huynh' },
+  { key: 'GiaoVien', label: 'Giáo viên' },
+  { key: 'QuanTriVien', label: 'Quản trị' },
+] as const;
+
+const adminStatusFilters = [
+  { key: 'all', label: 'Tất cả trạng thái' },
+  { key: 'HoatDong', label: 'Hoạt động' },
+  { key: 'BiKhoa', label: 'Bị khóa' },
+  { key: 'NgungHoatDong', label: 'Ngừng hoạt động' },
+] as const;
+
 export default function StudentsPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const [session, setSession] = useState<WebAuthSession | null>(null);
   const [students, setStudents] = useState<LinkedStudent[]>([]);
   const [supportSuggestions, setSupportSuggestions] = useState<TeacherSupportSuggestion[]>([]);
+  const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [query, setQuery] = useState('');
   const [filterKey, setFilterKey] = useState<(typeof filterOptions)[number]['key']>('all');
   const [sortKey, setSortKey] = useState<(typeof sortOptions)[number]['key']>('progress-desc');
+  const [adminRoleFilter, setAdminRoleFilter] = useState<(typeof adminRoleFilters)[number]['key']>('all');
+  const [adminStatusFilter, setAdminStatusFilter] = useState<(typeof adminStatusFilters)[number]['key']>('all');
+  const [adminBusyAccountId, setAdminBusyAccountId] = useState('');
   const [selectedSupportStudentId, setSelectedSupportStudentId] = useState('');
   const [supportFeedback, setSupportFeedback] = useState('');
   const [supportPriority, setSupportPriority] = useState(1);
@@ -109,8 +158,13 @@ export default function StudentsPage() {
       return;
     }
 
+    if (storedSession.user.roles.includes(USER_ROLES.ADMIN) && pathname === '/students') {
+      router.replace('/admin/users');
+      return;
+    }
+
     setSession(storedSession);
-  }, [router]);
+  }, [pathname, router]);
 
   useEffect(() => {
     if (!session) return;
@@ -119,9 +173,17 @@ export default function StudentsPage() {
     let active = true;
     async function load() {
       try {
+        const isAdminMode = currentSession.user.roles.includes(USER_ROLES.ADMIN);
         const isManagementMode = currentSession.user.roles.some(
           (role) => role === USER_ROLES.TEACHER || role === USER_ROLES.ADMIN,
         );
+
+        if (isAdminMode) {
+          const response = await apiGet<AdminAccount[]>('/users/admin/accounts', currentSession.accessToken);
+          if (!active) return;
+          setAdminAccounts(response);
+          return;
+        }
 
         if (isManagementMode) {
           const [studentsResponse, supportResponse] = await Promise.all([
@@ -244,6 +306,63 @@ export default function StudentsPage() {
       ),
     [supportStatusFilter, supportSuggestions],
   );
+  const adminSummary = useMemo(() => {
+    const totalAccounts = adminAccounts.length;
+    const activeAccounts = adminAccounts.filter((account) => account.status === 'HoatDong').length;
+    const lockedAccounts = adminAccounts.filter((account) => account.status === 'BiKhoa').length;
+    const suspendedAccounts = adminAccounts.filter((account) => account.status === 'NgungHoatDong').length;
+    const adminCount = adminAccounts.filter((account) => account.roles.includes(USER_ROLES.ADMIN)).length;
+    const teacherCount = adminAccounts.filter((account) => account.roles.includes(USER_ROLES.TEACHER)).length;
+    const parentCount = adminAccounts.filter((account) => account.roles.includes(USER_ROLES.PARENT)).length;
+    const studentCount = adminAccounts.filter((account) => account.roles.includes(USER_ROLES.STUDENT)).length;
+    const avgProgress = totalAccounts
+      ? Math.round(
+          adminAccounts.reduce((sum, account) => sum + Number(account.avgProgress ?? 0), 0) / totalAccounts,
+        )
+      : 0;
+    const totalPoints = adminAccounts.reduce((sum, account) => sum + Number(account.totalPoints ?? 0), 0);
+    const bestStreak = adminAccounts.reduce((max, account) => Math.max(max, Number(account.streak ?? 0)), 0);
+    const publishedPaths = adminAccounts.reduce((sum, account) => sum + Number(account.publishedPaths ?? 0), 0);
+    const publishedLessons = adminAccounts.reduce((sum, account) => sum + Number(account.publishedLessons ?? 0), 0);
+    const publishedQuizzes = adminAccounts.reduce((sum, account) => sum + Number(account.publishedQuizzes ?? 0), 0);
+
+    return {
+      totalAccounts,
+      activeAccounts,
+      lockedAccounts,
+      suspendedAccounts,
+      adminCount,
+      teacherCount,
+      parentCount,
+      studentCount,
+      avgProgress,
+      totalPoints,
+      bestStreak,
+      publishedPaths,
+      publishedLessons,
+      publishedQuizzes,
+    };
+  }, [adminAccounts]);
+  const visibleAdminAccounts = useMemo(() => {
+    const normalizedQuery = normalizeText(query.trim());
+
+    return [...adminAccounts]
+      .filter((account) => {
+        if (!normalizedQuery) return true;
+        return normalizeText(
+          [account.fullName, account.email, account.phone ?? '', account.roles.join(' ')].join(' '),
+        ).includes(normalizedQuery);
+      })
+      .filter((account) => (adminRoleFilter === 'all' ? true : account.roles.includes(adminRoleFilter)))
+      .filter((account) => (adminStatusFilter === 'all' ? true : account.status === adminStatusFilter))
+      .sort((left, right) => {
+        if (right.updatedAt !== left.updatedAt) {
+          return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+        }
+        return left.fullName.localeCompare(right.fullName, 'vi');
+      });
+  }, [adminAccounts, adminRoleFilter, adminStatusFilter, query]);
+  const isCurrentUserAdmin = !!session?.user.roles.includes(USER_ROLES.ADMIN);
 
   async function handleCreateSupport() {
     if (!session || !selectedSupportStudent) return;
@@ -316,17 +435,315 @@ export default function StudentsPage() {
     }
   }
 
+  async function handleUpdateAdminStatus(account: AdminAccount, status: AdminAccount['status']) {
+    if (!session || account.status === status) return;
+
+    if (account.id === session.user.id && status !== 'HoatDong') {
+      setError('Không thể tự khóa hoặc tự ngừng hoạt động tài khoản đang đăng nhập.');
+      return;
+    }
+
+    setError('');
+    setSuccessMessage('');
+    setAdminBusyAccountId(account.id);
+    try {
+      const updated = await apiPatch<AdminAccount>(
+        `/users/admin/accounts/${account.id}/status`,
+        { status },
+        session.accessToken,
+      );
+      setAdminAccounts((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setSuccessMessage(`Đã cập nhật trạng thái của ${updated.fullName} thành ${formatAccountStatus(updated.status)}.`);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        clearStoredSession();
+        router.replace('/login');
+        return;
+      }
+      setError(err instanceof Error ? err.message : 'Không cập nhật được trạng thái tài khoản.');
+    } finally {
+      setAdminBusyAccountId('');
+    }
+  }
+
   if (!session) {
     return (
       <main className="loadingShell">
-        <p>Đang chuyển hướng...</p>
+        <p>Đang tải học viên...</p>
       </main>
+    );
+  }
+
+  if (isCurrentUserAdmin) {
+    return (
+      <AppShell
+        session={session}
+        active="students"
+        roleContext={USER_ROLES.ADMIN}
+        showSidebar={false}
+        eyebrow="Quản lý người dùng"
+        title="Bảng điều khiển tài khoản"
+      >
+        <section className="adminUserHero">
+          <div className="adminUserHeroCopy">
+            <p className="eyebrow">Quản trị viên đang điều phối tài khoản hệ thống</p>
+            <h2>Kiểm soát người dùng, vai trò, trạng thái và sức khỏe tài khoản trong một màn hình.</h2>
+            <p>
+              Đây là trung tâm vận hành cho UC quản lý người dùng: tìm nhanh tài khoản, lọc theo vai trò và
+              trạng thái, xem mức độ hoạt động, khóa hoặc mở khóa tài khoản khi cần và theo dõi dữ liệu
+              học tập liên quan ở một nơi duy nhất.
+            </p>
+            <div className="adminHeroMeta">
+              <span>
+                <Users size={14} />
+                {adminSummary.totalAccounts} tài khoản
+              </span>
+              <span>
+                <UserCheck size={14} />
+                {adminSummary.activeAccounts} đang hoạt động
+              </span>
+              <span>
+                <UserX size={14} />
+                {adminSummary.lockedAccounts + adminSummary.suspendedAccounts} bị giới hạn
+              </span>
+            </div>
+          </div>
+
+          <div className="adminHeroStats">
+            <article>
+              <span>Học viên</span>
+              <strong>{adminSummary.studentCount}</strong>
+            </article>
+            <article>
+              <span>Phụ huynh</span>
+              <strong>{adminSummary.parentCount}</strong>
+            </article>
+            <article>
+              <span>Giáo viên</span>
+              <strong>{adminSummary.teacherCount}</strong>
+            </article>
+            <article className="accent">
+              <span>Quản trị</span>
+              <strong>{adminSummary.adminCount}</strong>
+            </article>
+          </div>
+        </section>
+
+        {error ? <div className="errorBox dashboardMessage">{error}</div> : null}
+        {successMessage ? <div className="subtleBox dashboardMessage">{successMessage}</div> : null}
+        {loading ? <div className="subtleBox dashboardMessage">Đang đồng bộ tài khoản...</div> : null}
+
+        <section className="metricGrid adminUserMetricGrid" aria-label="Chỉ số người dùng">
+          <Metric icon={Users} label="Tài khoản" value={adminSummary.totalAccounts} note="Toàn bộ người dùng" />
+          <Metric icon={UserCheck} label="Đang hoạt động" value={adminSummary.activeAccounts} note="Trạng thái tốt" />
+          <Metric icon={UserX} label="Đang khóa" value={adminSummary.lockedAccounts} note="Cần xem lại" />
+          <Metric icon={ShieldCheck} label="Dữ liệu học tập" value={adminSummary.avgProgress} note="Tiến độ trung bình %" />
+          <Metric icon={Target} label="Điểm tích lũy" value={adminSummary.totalPoints} note="Tổng điểm toàn hệ thống" />
+          <Metric icon={Clock3} label="Chuỗi học tốt nhất" value={adminSummary.bestStreak} note="Ngày liên tiếp cao nhất" />
+        </section>
+
+        <section className="panel adminUserToolbar" aria-label="Bộ lọc tài khoản">
+          <div className="sectionTitle">
+            <div>
+              <h2>Danh sách tài khoản</h2>
+              <span>Tìm kiếm theo tên, email, số điện thoại, vai trò hoặc trạng thái.</span>
+            </div>
+            <span className="inlineBadge">
+              <Mail size={14} />
+              {visibleAdminAccounts.length}/{adminSummary.totalAccounts}
+            </span>
+          </div>
+
+          <div className="adminToolbarGrid">
+            <label className="field">
+              <span>Tìm kiếm</span>
+              <div className="parentSearchInput">
+                <Search size={16} />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Tên, email, số điện thoại hoặc vai trò"
+                />
+              </div>
+            </label>
+
+            <label className="field">
+              <span>Lọc vai trò</span>
+              <select value={adminRoleFilter} onChange={(event) => setAdminRoleFilter(event.target.value as typeof adminRoleFilter)}>
+                {adminRoleFilters.map((option) => (
+                  <option value={option.key} key={option.key}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Lọc trạng thái</span>
+              <select
+                value={adminStatusFilter}
+                onChange={(event) => setAdminStatusFilter(event.target.value as typeof adminStatusFilter)}
+              >
+                {adminStatusFilters.map((option) => (
+                  <option value={option.key} key={option.key}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section className="adminUserWorkspace">
+          <div className="adminAccountList">
+            {visibleAdminAccounts.map((account) => {
+              const initials = account.fullName
+                .split(' ')
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((part) => part[0]?.toUpperCase())
+                .join('');
+              const roleLabels = account.roles.map(formatRoleLabel).join(' • ') || 'Chưa gán vai trò';
+              const canLock = account.status === 'HoatDong';
+              const canActivate = account.status !== 'HoatDong';
+
+              return (
+                <article className="adminAccountCard" key={account.id}>
+                  <div className="adminAccountIdentity">
+                    <div className="adminAvatar">{initials || 'ND'}</div>
+                    <div>
+                      <strong>{account.fullName}</strong>
+                      <span>{account.email}</span>
+                      <em>{roleLabels}</em>
+                    </div>
+                  </div>
+
+                  <div className="adminAccountFacts">
+                    <span>
+                      <ShieldCheck size={14} />
+                      {formatAccountStatus(account.status)}
+                    </span>
+                    <span>
+                      <Users size={14} />
+                      {account.roles.length} vai trò
+                    </span>
+                    <span>
+                      <Target size={14} />
+                      {account.totalPoints} điểm
+                    </span>
+                    <span>
+                      <TrendingUp size={14} />
+                      {Math.round(Number(account.avgProgress ?? 0))}% tiến độ
+                    </span>
+                    <span>
+                      <BookOpen size={14} />
+                      {account.activeLessons} bài đang học
+                    </span>
+                    <span>
+                      <ShieldAlert size={14} />
+                      {account.lockedLessons} bài bị khóa
+                    </span>
+                    <span>
+                      <Clock3 size={14} />
+                      Cập nhật {formatRecentDate(account.updatedAt)}
+                    </span>
+                  </div>
+
+                  <div className="adminAccountMeta">
+                    <span>
+                      <Mail size={14} />
+                      {account.phone ?? 'Chưa có số điện thoại'}
+                    </span>
+                    <span>
+                      <UserCheck size={14} />
+                      {account.linkedParentCount} liên kết phụ huynh
+                    </span>
+                    <span>
+                      <Clock3 size={14} />
+                      Tạo {formatRecentDate(account.createdAt)}
+                    </span>
+                  </div>
+
+                  <div className="adminAccountActions">
+                    {canLock ? (
+                      <button
+                        className="secondaryButton"
+                        type="button"
+                        disabled={adminBusyAccountId === account.id}
+                        onClick={() => void handleUpdateAdminStatus(account, 'BiKhoa')}
+                      >
+                        Khóa tài khoản
+                        <ShieldAlert size={16} />
+                      </button>
+                    ) : null}
+                    {canActivate ? (
+                      <button
+                        className="secondaryButton"
+                        type="button"
+                        disabled={adminBusyAccountId === account.id}
+                        onClick={() => void handleUpdateAdminStatus(account, 'HoatDong')}
+                      >
+                        Mở khóa
+                        <UserCheck size={16} />
+                      </button>
+                    ) : null}
+                  </div>
+                </article>
+              );
+            })}
+
+            {!visibleAdminAccounts.length && !loading ? (
+              <div className="emptyState">
+                <Users size={28} />
+                <h2>Không tìm thấy tài khoản phù hợp.</h2>
+                <p>Thử đổi bộ lọc vai trò, trạng thái hoặc từ khóa tìm kiếm để rà lại danh sách.</p>
+              </div>
+            ) : null}
+          </div>
+
+          <aside className="adminAccountInsights">
+            <div className="roleOverviewIntro">
+              <p className="eyebrow">Sức khỏe hệ thống</p>
+              <h3>Nhìn nhanh trạng thái vận hành</h3>
+              <p>
+                Bảng điều khiển này giúp quản trị viên quét toàn cục trước khi can thiệp vào tài khoản cụ thể.
+              </p>
+            </div>
+
+            <div className="roleOverviewStack">
+              <div className="roleOverviewItem">
+                <ShieldCheck size={16} />
+                <span>{adminSummary.activeAccounts} tài khoản hoạt động ổn định.</span>
+              </div>
+              <div className="roleOverviewItem">
+                <ShieldAlert size={16} />
+                <span>{adminSummary.lockedAccounts} tài khoản đang bị khóa để chờ xử lý.</span>
+              </div>
+              <div className="roleOverviewItem">
+                <Clock3 size={16} />
+                <span>{adminSummary.suspendedAccounts} tài khoản đang ở trạng thái ngừng hoạt động.</span>
+              </div>
+              <div className="roleOverviewItem">
+                <BookOpen size={16} />
+                <span>{adminSummary.adminCount} quản trị viên đang được cấp quyền.</span>
+              </div>
+            </div>
+          </aside>
+        </section>
+      </AppShell>
     );
   }
 
   if (isManagementMode) {
     return (
-      <AppShell session={session} active="students" eyebrow="Class Tracking" title="Theo dõi lớp học">
+      <AppShell
+        session={session}
+        active="students"
+        roleContext={USER_ROLES.ADMIN}
+        showSidebar={false}
+        eyebrow="Class Tracking"
+        title="Theo dõi lớp học"
+      >
         <section className="pageHeroCompact">
           <div>
             <p className="eyebrow">UC riêng của giáo viên và quản trị viên</p>
@@ -969,6 +1386,50 @@ function normalizeText(value: string) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
+}
+
+function Metric({
+  icon: Icon,
+  label,
+  value,
+  note,
+}: {
+  icon: ComponentType<{ size?: number }>;
+  label: string;
+  value: string | number;
+  note?: string;
+}) {
+  return (
+    <article className="metricCard">
+      <Icon size={18} />
+      <div>
+        <span>{label}</span>
+        <strong>{value}</strong>
+        {note ? <small>{note}</small> : null}
+      </div>
+    </article>
+  );
+}
+
+function formatRoleLabel(role: string) {
+  const labels: Record<string, string> = {
+    HocVien: 'Học viên',
+    PhuHuynh: 'Phụ huynh',
+    GiaoVien: 'Giáo viên',
+    QuanTriVien: 'Quản trị viên',
+  };
+
+  return labels[role] ?? role;
+}
+
+function formatAccountStatus(status: AdminAccount['status']) {
+  const labels: Record<AdminAccount['status'], string> = {
+    HoatDong: 'Hoạt động',
+    BiKhoa: 'Bị khóa',
+    NgungHoatDong: 'Ngừng hoạt động',
+  };
+
+  return labels[status] ?? status;
 }
 
 function formatRecentDate(value: string | null | undefined) {

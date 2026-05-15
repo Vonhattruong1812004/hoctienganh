@@ -20,8 +20,8 @@ import {
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { USER_ROLES } from '@english-learning/shared';
 import { AppShell } from '../../components/app-shell';
 import { ApiError, apiGet, apiPatch, apiPost } from '../../lib/api';
@@ -198,6 +198,7 @@ function normalizeText(value: string) {
 
 export default function QuizzesPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const [session, setSession] = useState<WebAuthSession | null>(null);
   const [quizzes, setQuizzes] = useState<QuizRow[]>([]);
   const [managementQuizzes, setManagementQuizzes] = useState<QuizManagementSummary[]>([]);
@@ -207,6 +208,7 @@ export default function QuizzesPage() {
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [managementQuery, setManagementQuery] = useState('');
   const [managementFilter, setManagementFilter] = useState<ManagementFilter>('all');
+  const [selectedManagementQuizId, setSelectedManagementQuizId] = useState('');
   const [newQuizTitle, setNewQuizTitle] = useState('');
   const [newQuizDescription, setNewQuizDescription] = useState('');
   const [newQuizType, setNewQuizType] = useState<'LuyenTap' | 'CuoiBai' | 'CuoiNgay'>('CuoiBai');
@@ -228,8 +230,13 @@ export default function QuizzesPage() {
       return;
     }
 
+    if (storedSession.user.roles.includes(USER_ROLES.ADMIN) && pathname === '/quizzes') {
+      router.replace('/admin/quizzes');
+      return;
+    }
+
     setSession(storedSession);
-  }, [router]);
+  }, [pathname, router]);
 
   useEffect(() => {
     if (!session) return;
@@ -337,6 +344,7 @@ export default function QuizzesPage() {
 
   const isManagementMode =
     session?.user.roles.some((role) => role === USER_ROLES.TEACHER || role === USER_ROLES.ADMIN) ?? false;
+  const isAdmin = session?.user.roles.includes(USER_ROLES.ADMIN) ?? false;
   const isParent = !isManagementMode && (session?.user.roles.includes(USER_ROLES.PARENT) ?? false);
   const selectedStudent = useMemo(
     () => linkedStudents.find((student) => student.id === selectedStudentId) ?? linkedStudents[0] ?? null,
@@ -440,6 +448,53 @@ export default function QuizzesPage() {
         return a.title.localeCompare(b.title, 'vi-VN');
       });
   }, [managementFilter, managementQuizzes, managementQuery]);
+  const focusManagementQuiz = useMemo(
+    () =>
+      visibleManagementQuizzes.find((quiz) => quiz.id === selectedManagementQuizId) ??
+      visibleManagementQuizzes[0] ??
+      null,
+    [selectedManagementQuizId, visibleManagementQuizzes],
+  );
+  const focusPassRate = focusManagementQuiz?.attemptsCount
+    ? Math.round((focusManagementQuiz.passedAttemptsCount / focusManagementQuiz.attemptsCount) * 100)
+    : 0;
+  const focusQuestionReadiness = focusManagementQuiz
+    ? Math.min(100, Math.round((Number(focusManagementQuiz.questionsCount ?? 0) / 12) * 100))
+    : 0;
+  const focusQualityScore = focusManagementQuiz
+    ? Math.round(
+        (focusQuestionReadiness +
+          (focusManagementQuiz.status === 'CongBo' ? 100 : 35) +
+          (focusManagementQuiz.lessonStatus === 'CongBo' ? 100 : 45) +
+          (focusManagementQuiz.attemptsCount ? focusPassRate : 45)) /
+          4,
+      )
+    : 0;
+  const focusQuizWarnings = focusManagementQuiz
+    ? [
+        focusManagementQuiz.status !== 'CongBo' ? 'Quiz chưa công bố cho học viên.' : null,
+        focusManagementQuiz.lessonStatus !== 'CongBo' ? 'Bài học gắn quiz chưa ở trạng thái công bố.' : null,
+        Number(focusManagementQuiz.questionsCount ?? 0) === 0 ? 'Quiz chưa có câu hỏi.' : null,
+        !focusManagementQuiz.durationMinutes ? 'Quiz chưa cấu hình thời lượng.' : null,
+        !focusManagementQuiz.maxAttempts ? 'Quiz chưa giới hạn số lần làm.' : null,
+        focusManagementQuiz.attemptsCount > 0 && focusPassRate < 60
+          ? 'Tỷ lệ đạt thấp, cần rà lại độ khó hoặc nội dung ôn tập.'
+          : null,
+      ].filter((warning): warning is string => Boolean(warning))
+    : [];
+
+  useEffect(() => {
+    if (!visibleManagementQuizzes.length) {
+      if (selectedManagementQuizId) {
+        setSelectedManagementQuizId('');
+      }
+      return;
+    }
+
+    if (!selectedManagementQuizId || !visibleManagementQuizzes.some((quiz) => quiz.id === selectedManagementQuizId)) {
+      setSelectedManagementQuizId(visibleManagementQuizzes[0].id);
+    }
+  }, [selectedManagementQuizId, visibleManagementQuizzes]);
 
   useEffect(() => {
     if (!newQuizLessonId && lessonOptions[0]) {
@@ -534,18 +589,29 @@ export default function QuizzesPage() {
   if (!session) {
     return (
       <main className="loadingShell">
-        <p>Đang chuyển hướng...</p>
+        <p>Đang tải quiz...</p>
       </main>
     );
   }
 
   if (isManagementMode) {
     return (
-      <AppShell session={session} active="quizzes" eyebrow="Quiz Management" title="Quản lý quiz">
+      <AppShell
+        session={session}
+        active="quizzes"
+        roleContext={USER_ROLES.ADMIN}
+        showSidebar={false}
+        eyebrow="Quản lý quiz"
+        title="Điều phối quiz"
+      >
         <section className="pageHeroCompact">
           <div>
-            <p className="eyebrow">UC riêng của giáo viên và quản trị viên</p>
-            <h2>Rà soát quiz theo lộ trình, bài học, trạng thái công bố và hiệu suất làm bài.</h2>
+            <p className="eyebrow">{isAdmin ? 'Điều phối kiểm tra học tập' : 'Quản lý kiểm tra học tập'}</p>
+            <h2>
+              {isAdmin
+                ? 'Quản trị viên kiểm soát toàn bộ quiz, mức sẵn sàng câu hỏi và chất lượng đánh giá.'
+                : 'Giáo viên rà soát quiz theo lộ trình, bài học, trạng thái công bố và hiệu suất làm bài.'}
+            </h2>
             <p>
               Màn hình này gom số câu hỏi, lượt làm, tỷ lệ đạt, thời lượng và trạng thái nội dung để quản lý
               nhanh.
@@ -560,6 +626,100 @@ export default function QuizzesPage() {
         {error ? <div className="errorBox dashboardMessage">{error}</div> : null}
         {successMessage ? <div className="subtleBox dashboardMessage">{successMessage}</div> : null}
         {loading ? <div className="subtleBox dashboardMessage">Đang tải dữ liệu quiz...</div> : null}
+
+        <section className="quizManagementFocus">
+          <div className="quizManagementFocusCopy">
+            <p className="eyebrow">Quiz ưu tiên</p>
+            <h3>{focusManagementQuiz ? focusManagementQuiz.title : 'Chưa có quiz phù hợp bộ lọc'}</h3>
+            <p>
+              {focusManagementQuiz
+                ? focusManagementQuiz.description ?? 'Quiz này chưa có mô tả chi tiết.'
+                : 'Hãy đổi bộ lọc hoặc từ khóa tìm kiếm để xem quiz đang được ưu tiên xử lý.'}
+            </p>
+
+            {focusManagementQuiz ? (
+              <>
+                <div className="progressJourneyBadges quizManagementMeta">
+                  <span>
+                    <CheckCircle2 size={14} />
+                    {statusLabels[focusManagementQuiz.status] ?? focusManagementQuiz.status}
+                  </span>
+                  <span>
+                    <LibraryBig size={14} />
+                    {focusManagementQuiz.pathName ?? 'Chưa gắn lộ trình'}
+                  </span>
+                  <span>
+                    <BookOpen size={14} />
+                    {focusManagementQuiz.lessonTitle}
+                  </span>
+                  <span>
+                    <TimerReset size={14} />
+                    {focusManagementQuiz.durationMinutes ?? 0} phút
+                  </span>
+                </div>
+
+                <div className="quizManagementReadiness">
+                  <div>
+                    <div className="quizManagementReadinessHead">
+                      <span>Độ sẵn sàng câu hỏi</span>
+                      <strong>{focusQuestionReadiness}%</strong>
+                    </div>
+                    <div className="progressRail">
+                      <div className="progressFill" style={{ width: `${focusQuestionReadiness}%` }} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="quizManagementReadinessHead">
+                      <span>Tỷ lệ đạt thực tế</span>
+                      <strong>{focusPassRate}%</strong>
+                    </div>
+                    <div className="progressRail">
+                      <div className="progressFill" style={{ width: `${focusPassRate}%` }} />
+                    </div>
+                  </div>
+                </div>
+
+                {focusQuizWarnings.length ? (
+                  <div className="quizManagementWarnings">
+                    {focusQuizWarnings.map((warning) => (
+                      <div key={warning}>
+                        <ShieldAlert size={14} />
+                        <span>{warning}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="subtleBox quizManagementReady">
+                    Quiz đang ổn: đã có cấu hình chính và đủ điều kiện tiếp tục tinh chỉnh nội dung.
+                  </div>
+                )}
+              </>
+            ) : null}
+          </div>
+
+          <div className="quizManagementSnapshot">
+            <article className="accent">
+              <span>Chất lượng tổng thể</span>
+              <strong>{focusQualityScore}%</strong>
+              <small>Kết hợp câu hỏi, công bố, bài học và tỷ lệ đạt</small>
+            </article>
+            <article>
+              <span>Câu hỏi</span>
+              <strong>{focusManagementQuiz?.questionsCount ?? 0}</strong>
+              <small>Số câu hỏi trong quiz</small>
+            </article>
+            <article>
+              <span>Lượt làm</span>
+              <strong>{focusManagementQuiz?.attemptsCount ?? 0}</strong>
+              <small>{focusManagementQuiz?.passedAttemptsCount ?? 0} lượt đạt yêu cầu</small>
+            </article>
+            <article>
+              <span>Điểm trung bình</span>
+              <strong>{Math.round(Number(focusManagementQuiz?.averageScore ?? 0))}%</strong>
+              <small>Cập nhật từ lịch sử làm bài</small>
+            </article>
+          </div>
+        </section>
 
         <section className="lessonInsightGrid" aria-label="Tổng quan quản lý quiz">
           <div className="lessonInsightCard">
@@ -752,110 +912,230 @@ export default function QuizzesPage() {
           </div>
         </section>
 
-        <section className="quizManagementGrid">
-          {visibleManagementQuizzes.map((quiz) => {
-            const passRate = quiz.attemptsCount ? Math.round((quiz.passedAttemptsCount / quiz.attemptsCount) * 100) : 0;
+        <section className="quizManagementWorkspace">
+          <aside className="quizManagementRoster">
+            <div className="sectionTitle">
+              <div>
+                <h2>Danh sách quiz</h2>
+                <span>
+                  {visibleManagementQuizzes.length} / {managementQuizzes.length} quiz phù hợp bộ lọc
+                </span>
+              </div>
+              <span className="inlineBadge">
+                <Sparkles size={14} />
+                {managementFilterLabels[managementFilter]}
+              </span>
+            </div>
 
-            return (
-              <article className="lessonListCard quizManagementCard" key={quiz.id}>
-                <div className="pathCardTop">
-                  <div className="featureIcon">
-                    {quiz.status === 'CongBo' ? <CheckCircle2 size={20} /> : <ShieldAlert size={20} />}
+            <div className="quizManagementGrid">
+              {visibleManagementQuizzes.map((quiz) => {
+                const passRate = quiz.attemptsCount
+                  ? Math.round((quiz.passedAttemptsCount / quiz.attemptsCount) * 100)
+                  : 0;
+                const activeQuizCard = focusManagementQuiz?.id === quiz.id;
+
+                return (
+                  <article
+                    className={`lessonListCard quizManagementCard ${activeQuizCard ? 'active' : ''}`}
+                    key={quiz.id}
+                  >
+                    <div className="pathCardTop">
+                      <div className="featureIcon">
+                        {quiz.status === 'CongBo' ? <CheckCircle2 size={20} /> : <ShieldAlert size={20} />}
+                      </div>
+                      <span className="inlineBadge">
+                        {quiz.status === 'CongBo' ? 'Đã công bố' : statusLabels[quiz.status] ?? quiz.status}
+                      </span>
+                    </div>
+
+                    <div>
+                      <strong>{quiz.title}</strong>
+                      <p>{quiz.description ?? 'Chưa có mô tả cho quiz này.'}</p>
+                    </div>
+
+                    <div className="featureMeta">
+                      <em>{quiz.pathName ?? 'Chưa gắn lộ trình'}</em>
+                      <em>{quiz.stageName ?? 'Chưa gắn giai đoạn'}</em>
+                      <em>{quiz.lessonTitle}</em>
+                      <em>{quiz.topicName ?? 'Chưa gắn chủ đề'}</em>
+                    </div>
+
+                    <div className="featureMeta">
+                      <em>
+                        <BookOpen size={14} />
+                        {quizTypeLabels[quiz.type] ?? quiz.type}
+                      </em>
+                      <em>
+                        <TimerReset size={14} />
+                        {quiz.durationMinutes ?? 0} phút
+                      </em>
+                      <em>
+                        <Target size={14} />
+                        Đạt {quiz.passingScore}%
+                      </em>
+                      <em>{quiz.maxAttempts ?? 'Không giới hạn'} lượt làm</em>
+                    </div>
+
+                    <div className="progressRail" aria-label={`Tỷ lệ đạt của ${quiz.title}`}>
+                      <div className="progressFill" style={{ width: `${Math.max(passRate, 8)}%` }} />
+                    </div>
+
+                    <div className="pathCardStats">
+                      <span>{quiz.questionsCount} câu hỏi</span>
+                      <span>{quiz.attemptsCount} lượt làm</span>
+                      <span>{quiz.passedAttemptsCount} lượt đạt</span>
+                    </div>
+
+                    <div className="featureMeta">
+                      <em>Tỷ lệ đạt {passRate}%</em>
+                      <em>TB {Math.round(Number(quiz.averageScore ?? 0))}%</em>
+                      <em>{formatDateLabel(quiz.createdAt)}</em>
+                      <em>{formatDateLabel(quiz.latestAttemptAt)}</em>
+                    </div>
+
+                    <div className="parentStudentActions quizManagementActions">
+                      <button
+                        type="button"
+                        className="secondaryButton"
+                        onClick={() => setSelectedManagementQuizId(quiz.id)}
+                      >
+                        Xem nhanh
+                      </button>
+                      <button
+                        type="button"
+                        className="secondaryButton"
+                        disabled={quizActionBusyId === quiz.id || quiz.status === 'CongBo'}
+                        onClick={() => void handleUpdateQuizStatus(quiz, 'CongBo')}
+                      >
+                        Công bố
+                      </button>
+                      <button
+                        type="button"
+                        className="secondaryButton"
+                        disabled={quizActionBusyId === quiz.id || quiz.status === 'Nhap'}
+                        onClick={() => void handleUpdateQuizStatus(quiz, 'Nhap')}
+                      >
+                        Đưa về nháp
+                      </button>
+                      <button
+                        type="button"
+                        className="secondaryButton"
+                        disabled={quizActionBusyId === quiz.id || quiz.status === 'An'}
+                        onClick={() => void handleUpdateQuizStatus(quiz, 'An')}
+                      >
+                        Ẩn
+                      </button>
+                    </div>
+
+                    <div className="quizManagementLinkGrid">
+                      <Link
+                        className="primaryButton fullWidth"
+                        href={`/quizzes/${quiz.id}`}
+                        onClick={() => setSelectedManagementQuizId(quiz.id)}
+                      >
+                        Mở chi tiết quản lý
+                        <ArrowRight size={16} />
+                      </Link>
+                      <Link className="secondaryButton fullWidth" href={`/lessons/${quiz.lessonId}`}>
+                        Về bài học
+                        <ArrowRight size={16} />
+                      </Link>
+                    </div>
+                  </article>
+                );
+              })}
+
+              {!visibleManagementQuizzes.length && !loading ? (
+                <div className="subtleBox">Không có quiz nào khớp bộ lọc hiện tại.</div>
+              ) : null}
+            </div>
+          </aside>
+
+          <aside className="quizManagementDetail">
+            {focusManagementQuiz ? (
+              <section className="quizManagementDetailHero">
+                <div className="quizManagementDetailCopy">
+                  <p className="eyebrow">Chi tiết nhanh</p>
+                  <h3>{focusManagementQuiz.title}</h3>
+                  <p>{focusManagementQuiz.description ?? 'Quiz này chưa có mô tả chi tiết.'}</p>
+                  <div className="progressJourneyBadges quizManagementMeta">
+                    <span>
+                      <BookOpen size={14} />
+                      {focusManagementQuiz.lessonTitle}
+                    </span>
+                    <span>
+                      <Target size={14} />
+                      Đạt {focusManagementQuiz.passingScore}%
+                    </span>
+                    <span>
+                      <TimerReset size={14} />
+                      {focusManagementQuiz.durationMinutes ?? 0} phút
+                    </span>
+                    <span>
+                      <Award size={14} />
+                      TB {Math.round(Number(focusManagementQuiz.averageScore ?? 0))}%
+                    </span>
                   </div>
-                  <span className="inlineBadge">
-                    {quiz.status === 'CongBo' ? 'Đã công bố' : statusLabels[quiz.status] ?? quiz.status}
-                  </span>
                 </div>
 
-                <div>
-                  <strong>{quiz.title}</strong>
-                  <p>{quiz.description ?? 'Chưa có mô tả cho quiz này.'}</p>
+                <div
+                  className="quizManagementScore"
+                  style={{ '--score-fill': `${focusQualityScore}%` } as CSSProperties}
+                >
+                  <strong>{focusQualityScore}%</strong>
+                  <small>chất lượng</small>
                 </div>
+              </section>
+            ) : null}
 
-                <div className="featureMeta">
-                  <em>{quiz.pathName ?? 'Chưa gắn lộ trình'}</em>
-                  <em>{quiz.stageName ?? 'Chưa gắn giai đoạn'}</em>
-                  <em>{quiz.lessonTitle}</em>
-                  <em>{quiz.topicName ?? 'Chưa gắn chủ đề'}</em>
-                </div>
-
-                <div className="featureMeta">
-                  <em>
-                    <BookOpen size={14} />
-                    {quizTypeLabels[quiz.type] ?? quiz.type}
-                  </em>
-                  <em>
-                    <TimerReset size={14} />
-                    {quiz.durationMinutes ?? 0} phút
-                  </em>
-                  <em>
-                    <Target size={14} />
-                    Đạt {quiz.passingScore}%
-                  </em>
-                  <em>{quiz.maxAttempts ?? 'Không giới hạn'} lượt làm</em>
-                </div>
-
-                <div className="progressRail" aria-label={`Tỷ lệ đạt của ${quiz.title}`}>
-                  <div className="progressFill" style={{ width: `${Math.max(passRate, quiz.attemptsCount ? 8 : 8)}%` }} />
-                </div>
-
-                <div className="pathCardStats">
-                  <span>{quiz.questionsCount} câu hỏi</span>
-                  <span>{quiz.attemptsCount} lượt làm</span>
-                  <span>{quiz.passedAttemptsCount} lượt đạt</span>
-                </div>
-
-                <div className="featureMeta">
-                  <em>Tỷ lệ đạt {passRate}%</em>
-                  <em>TB {Math.round(Number(quiz.averageScore ?? 0))}%</em>
-                  <em>{formatDateLabel(quiz.createdAt)}</em>
-                  <em>{formatDateLabel(quiz.latestAttemptAt)}</em>
-                </div>
-
-                <div style={{ display: 'grid', gap: 8 }}>
-                  <Link className="primaryButton fullWidth" href={`/quizzes/${quiz.id}`}>
-                    Mở chi tiết quản lý
-                    <ArrowRight size={16} />
-                  </Link>
-                  <Link className="secondaryButton fullWidth" href={`/lessons/${quiz.lessonId}`}>
-                    Về bài học
-                    <ArrowRight size={16} />
-                  </Link>
-                </div>
-
-                <div className="parentStudentActions">
-                  <button
-                    type="button"
-                    className="secondaryButton"
-                    disabled={quizActionBusyId === quiz.id || quiz.status === 'CongBo'}
-                    onClick={() => void handleUpdateQuizStatus(quiz, 'CongBo')}
-                  >
-                    Công bố
-                  </button>
-                  <button
-                    type="button"
-                    className="secondaryButton"
-                    disabled={quizActionBusyId === quiz.id || quiz.status === 'Nhap'}
-                    onClick={() => void handleUpdateQuizStatus(quiz, 'Nhap')}
-                  >
-                    Đưa về nháp
-                  </button>
-                  <button
-                    type="button"
-                    className="secondaryButton"
-                    disabled={quizActionBusyId === quiz.id || quiz.status === 'An'}
-                    onClick={() => void handleUpdateQuizStatus(quiz, 'An')}
-                  >
-                    Ẩn
-                  </button>
-                </div>
+            <div className="quizManagementSnapshot">
+              <article>
+                <span>Câu hỏi</span>
+                <strong>{focusManagementQuiz?.questionsCount ?? 0}</strong>
+                <small>Mức sẵn sàng {focusQuestionReadiness}%</small>
               </article>
-            );
-          })}
+              <article>
+                <span>Lượt làm</span>
+                <strong>{focusManagementQuiz?.attemptsCount ?? 0}</strong>
+                <small>{focusManagementQuiz?.passedAttemptsCount ?? 0} lượt đạt</small>
+              </article>
+              <article>
+                <span>Tỷ lệ đạt</span>
+                <strong>{focusPassRate}%</strong>
+                <small>Dựa trên lịch sử nộp bài</small>
+              </article>
+              <article>
+                <span>Số lần làm</span>
+                <strong>{focusManagementQuiz?.maxAttempts ?? 0}</strong>
+                <small>{focusManagementQuiz?.maxAttempts ? 'Giới hạn lượt làm' : 'Chưa giới hạn'}</small>
+              </article>
+              <article>
+                <span>Loại quiz</span>
+                <strong>{quizTypeLabels[focusManagementQuiz?.type ?? ''] ?? '--'}</strong>
+                <small>Phân loại nghiệp vụ đánh giá</small>
+              </article>
+              <article>
+                <span>Gần nhất</span>
+                <strong>{formatDateLabel(focusManagementQuiz?.latestAttemptAt ?? null)}</strong>
+                <small>Lần nộp bài mới nhất</small>
+              </article>
+            </div>
 
-          {!visibleManagementQuizzes.length && !loading ? (
-            <div className="subtleBox">Không có quiz nào khớp bộ lọc hiện tại.</div>
-          ) : null}
+            {focusQuizWarnings.length ? (
+              <div className="quizManagementWarnings">
+                {focusQuizWarnings.map((warning) => (
+                  <div key={warning}>
+                    <ShieldAlert size={14} />
+                    <span>{warning}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="subtleBox quizManagementReady">
+                Quiz này đủ điều kiện quản trị cơ bản và có thể tiếp tục tinh chỉnh câu hỏi chi tiết.
+              </div>
+            )}
+          </aside>
         </section>
       </AppShell>
     );

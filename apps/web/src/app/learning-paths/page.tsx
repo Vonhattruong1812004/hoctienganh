@@ -19,7 +19,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { USER_ROLES } from '@english-learning/shared';
 import { AppShell } from '../../components/app-shell';
@@ -117,6 +117,7 @@ function formatDateLabel(value: string | Date | null | undefined) {
 
 export default function LearningPathsPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const [session, setSession] = useState<WebAuthSession | null>(null);
   const [paths, setPaths] = useState<LearningPathSummary[]>([]);
   const [pathDetails, setPathDetails] = useState<LearningPathDetail[]>([]);
@@ -142,8 +143,13 @@ export default function LearningPathsPage() {
       return;
     }
 
+    if (storedSession.user.roles.includes(USER_ROLES.ADMIN) && pathname === '/learning-paths') {
+      router.replace('/admin/learning-paths');
+      return;
+    }
+
     setSession(storedSession);
-  }, [router]);
+  }, [pathname, router]);
 
   useEffect(() => {
     if (!session) return;
@@ -310,6 +316,35 @@ export default function LearningPathsPage() {
       quizCoverage: totalQuizzes ? Math.round((publishedQuizzes / totalQuizzes) * 100) : 0,
     };
   }, [managementPaths]);
+  const focusManagementPath = visibleManagementPaths[0] ?? null;
+  const focusLessonCoverage = focusManagementPath
+    ? Math.round(
+        (Number(focusManagementPath.publishedLessonsCount ?? 0) /
+          Math.max(1, Number(focusManagementPath.lessonsCount ?? 0))) *
+          100,
+      )
+    : 0;
+  const focusQuizCoverage = focusManagementPath
+    ? Math.round(
+        (Number(focusManagementPath.publishedQuizzesCount ?? 0) /
+          Math.max(1, Number(focusManagementPath.quizzesCount ?? 0))) *
+          100,
+      )
+    : 0;
+  const focusReadiness = focusManagementPath ? Math.round((focusLessonCoverage + focusQuizCoverage) / 2) : 0;
+  const focusWarnings = focusManagementPath
+    ? [
+        focusManagementPath.status !== 'CongBo'
+          ? 'Lộ trình chưa được công bố chính thức.'
+          : null,
+        Number(focusManagementPath.publishedLessonsCount ?? 0) < Number(focusManagementPath.lessonsCount ?? 0)
+          ? 'Vẫn còn bài học chưa được công bố.'
+          : null,
+        Number(focusManagementPath.publishedQuizzesCount ?? 0) < Number(focusManagementPath.quizzesCount ?? 0)
+          ? 'Vẫn còn quiz chưa sẵn sàng công bố.'
+          : null,
+      ].filter((warning): warning is string => Boolean(warning))
+    : [];
 
   const totalLessons = pathViews.reduce((total, path) => total + path.lessonsCount, 0);
   const totalCompleted = pathViews.reduce((total, path) => total + path.completedCount, 0);
@@ -387,25 +422,25 @@ export default function LearningPathsPage() {
   if (!session) {
     return (
       <main className="loadingShell">
-        <p>Đang chuyển hướng...</p>
+        <p>Đang tải lộ trình...</p>
       </main>
     );
   }
 
   if (isManagementMode) {
     return (
-      <AppShell
-        session={session}
-        active="paths"
-        eyebrow="Learning Paths / Content Management"
-        title="Quản lý lộ trình học"
-      >
-        <section className="pageHeroCompact">
-          <div>
-            <p className="eyebrow">UC riêng của giáo viên và quản trị viên</p>
-            <h2>
-              Quản lý toàn bộ lộ trình, theo dõi trạng thái công bố và kiểm tra mức độ sẵn sàng
-              của nội dung học.
+    <AppShell
+      session={session}
+      active="paths"
+      eyebrow="Điều phối lộ trình"
+      title="Quản lý lộ trình học"
+    >
+      <section className="pageHeroCompact">
+        <div>
+          <p className="eyebrow">Điều phối nội dung học tập</p>
+          <h2>
+            Quản lý toàn bộ lộ trình, theo dõi trạng thái công bố và kiểm tra mức độ sẵn sàng
+            của nội dung học.
             </h2>
             <p>
               Màn hình này cho phép rà soát lộ trình, số chặng, số bài học, số quiz và tỷ lệ nội
@@ -445,6 +480,104 @@ export default function LearningPathsPage() {
             <strong>
               {managementStats.lessonCoverage}% / {managementStats.quizCoverage}%
             </strong>
+          </div>
+        </section>
+
+        <section className="pathManagementFocus">
+          <div className="pathManagementFocusCopy">
+            <p className="eyebrow">Lộ trình ưu tiên</p>
+            <h3>
+              {focusManagementPath
+                ? focusManagementPath.name
+                : 'Chưa có lộ trình khớp bộ lọc hiện tại'}
+            </h3>
+            <p>
+              {focusManagementPath
+                ? focusManagementPath.description
+                : 'Thay đổi bộ lọc hoặc từ khóa tìm kiếm để xem ngay lộ trình đang được ưu tiên xử lý.'}
+            </p>
+
+            {focusManagementPath ? (
+              <>
+                <div className="progressJourneyBadges pathManagementMeta">
+                  <span>
+                    <ShieldCheck size={14} />
+                    {statusLabels[focusManagementPath.status] ?? focusManagementPath.status}
+                  </span>
+                  <span>
+                    <LibraryBig size={14} />
+                    {focusManagementPath.level}
+                  </span>
+                  <span>
+                    <Target size={14} />
+                    {focusManagementPath.targetAudience}
+                  </span>
+                  <span>
+                    <BarChart3 size={14} />
+                    {focusManagementPath.stagesCount} chặng
+                  </span>
+                </div>
+
+                <div className="pathManagementReadiness">
+                  <div>
+                    <div className="pathManagementReadinessHead">
+                      <span>Bài học đã công bố</span>
+                      <strong>{focusLessonCoverage}%</strong>
+                    </div>
+                    <div className="progressRail">
+                      <div className="progressFill" style={{ width: `${focusLessonCoverage}%` }} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="pathManagementReadinessHead">
+                      <span>Quiz đã công bố</span>
+                      <strong>{focusQuizCoverage}%</strong>
+                    </div>
+                    <div className="progressRail">
+                      <div className="progressFill" style={{ width: `${focusQuizCoverage}%` }} />
+                    </div>
+                  </div>
+                </div>
+
+                {focusWarnings.length ? (
+                  <div className="pathManagementWarnings">
+                    {focusWarnings.map((warning) => (
+                      <div key={warning}>
+                        <ShieldAlert size={14} />
+                        <span>{warning}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="subtleBox pathManagementReady">
+                    Lộ trình này đã sẵn sàng công bố, chỉ cần duy trì chất lượng nội dung.
+                  </div>
+                )}
+              </>
+            ) : null}
+          </div>
+
+          <div className="pathManagementSnapshot">
+            <article>
+              <span>Sẵn sàng tổng thể</span>
+              <strong>{focusReadiness}%</strong>
+              <small>Kết hợp mức sẵn sàng bài học và quiz</small>
+            </article>
+            <article>
+              <span>Bài học</span>
+              <strong>{focusManagementPath?.lessonsCount ?? 0}</strong>
+              <small>{focusManagementPath?.publishedLessonsCount ?? 0} bài đã công bố</small>
+            </article>
+            <article>
+              <span>Quiz</span>
+              <strong>{focusManagementPath?.quizzesCount ?? 0}</strong>
+              <small>{focusManagementPath?.publishedQuizzesCount ?? 0} quiz đã công bố</small>
+            </article>
+            <article>
+              <span>Ngày tạo</span>
+              <strong>{formatDateLabel(focusManagementPath?.createdAt ?? null)}</strong>
+              <small>Thông tin cấu hình lộ trình</small>
+            </article>
           </div>
         </section>
 
@@ -682,7 +815,14 @@ export default function LearningPathsPage() {
   }
 
   return (
-    <AppShell session={session} active="paths" eyebrow="Learning Paths" title="Lộ trình học">
+    <AppShell
+      session={session}
+      active="paths"
+      roleContext={USER_ROLES.ADMIN}
+      showSidebar={false}
+      eyebrow="Learning Paths"
+      title="Lộ trình học"
+    >
       <section className="pageHeroCompact">
         <div>
           <p className="eyebrow">UC3 - Xem lộ trình học</p>

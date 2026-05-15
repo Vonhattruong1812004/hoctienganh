@@ -19,8 +19,8 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { USER_ROLES } from '@english-learning/shared';
 import { AppShell } from '../../components/app-shell';
 import { ApiError, apiGet, apiPatch, apiPost } from '../../lib/api';
@@ -126,6 +126,7 @@ function formatDateLabel(value: string | Date | null | undefined) {
 
 export default function LessonsPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const [session, setSession] = useState<WebAuthSession | null>(null);
   const [path, setPath] = useState<LearningPathDetail | null>(null);
   const [progress, setProgress] = useState<ProgressRow[]>([]);
@@ -133,6 +134,7 @@ export default function LessonsPage() {
   const [activeFilter, setActiveFilter] = useState<LessonStatus>('TatCa');
   const [managementFilter, setManagementFilter] = useState<(typeof managementFilters)[number]>('all');
   const [managementQuery, setManagementQuery] = useState('');
+  const [selectedManagementLessonId, setSelectedManagementLessonId] = useState('');
   const [newLessonTitle, setNewLessonTitle] = useState('');
   const [newLessonDescription, setNewLessonDescription] = useState('');
   const [newLessonContent, setNewLessonContent] = useState('');
@@ -147,6 +149,7 @@ export default function LessonsPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const isAdmin = session?.user.roles.includes(USER_ROLES.ADMIN) ?? false;
   const isManagementMode = session?.user.roles.some(
     (role) => role === USER_ROLES.TEACHER || role === USER_ROLES.ADMIN,
   );
@@ -158,8 +161,13 @@ export default function LessonsPage() {
       return;
     }
 
+    if (storedSession.user.roles.includes(USER_ROLES.ADMIN) && pathname === '/lessons') {
+      router.replace('/admin/lessons');
+      return;
+    }
+
     setSession(storedSession);
-  }, [router]);
+  }, [pathname, router]);
 
   useEffect(() => {
     if (!session) return;
@@ -362,6 +370,55 @@ export default function LessonsPage() {
       quizCoverage: totalQuizzes ? Math.round((publishedQuizzes / totalQuizzes) * 100) : 0,
     };
   }, [managementLessons]);
+  const focusManagementLesson = useMemo(
+    () =>
+      visibleManagementLessons.find((lesson) => lesson.id === selectedManagementLessonId) ??
+      visibleManagementLessons[0] ??
+      null,
+    [selectedManagementLessonId, visibleManagementLessons],
+  );
+  const focusContentLoad = focusManagementLesson
+    ? Math.min(
+        100,
+        Math.round(
+          (((Number(focusManagementLesson.tasksCount ?? 0) +
+            Number(focusManagementLesson.requiredTasksCount ?? 0) +
+            Number(focusManagementLesson.vocabCount ?? 0) +
+            Number(focusManagementLesson.grammarCount ?? 0) +
+            Number(focusManagementLesson.resourcesCount ?? 0) +
+            Number(focusManagementLesson.quizzesCount ?? 0)) /
+            18) *
+            100),
+        ),
+      )
+    : 0;
+  const focusQuizReadiness = focusManagementLesson
+    ? focusManagementLesson.quizzesCount
+      ? Math.round((Number(focusManagementLesson.publishedQuizzesCount ?? 0) / focusManagementLesson.quizzesCount) * 100)
+      : 0
+    : 0;
+  const focusLessonWarnings = focusManagementLesson
+    ? [
+        focusManagementLesson.status !== 'CongBo' ? 'Bài chưa công bố ra người học.' : null,
+        !focusManagementLesson.stageId ? 'Chưa gắn giai đoạn học.' : null,
+        !focusManagementLesson.topicId ? 'Chưa gắn chủ đề học.' : null,
+        Number(focusManagementLesson.tasksCount ?? 0) === 0 ? 'Chưa có nhiệm vụ học tập.' : null,
+        Number(focusManagementLesson.quizzesCount ?? 0) === 0 ? 'Chưa có quiz liên kết.' : null,
+      ].filter((warning): warning is string => Boolean(warning))
+    : [];
+
+  useEffect(() => {
+    if (!visibleManagementLessons.length) {
+      if (selectedManagementLessonId) {
+        setSelectedManagementLessonId('');
+      }
+      return;
+    }
+
+    if (!selectedManagementLessonId || !visibleManagementLessons.some((lesson) => lesson.id === selectedManagementLessonId)) {
+      setSelectedManagementLessonId(visibleManagementLessons[0].id);
+    }
+  }, [selectedManagementLessonId, visibleManagementLessons]);
 
   useEffect(() => {
     if (!newLessonStageId && stageOptions[0]) {
@@ -454,18 +511,29 @@ export default function LessonsPage() {
   if (!session) {
     return (
       <main className="loadingShell">
-        <p>Đang chuyển hướng...</p>
+        <p>Đang tải bài học...</p>
       </main>
     );
   }
 
   if (isManagementMode) {
     return (
-      <AppShell session={session} active="lessons" eyebrow="Lesson Management" title="Quản lý bài học">
+      <AppShell
+        session={session}
+        active="lessons"
+        roleContext={USER_ROLES.ADMIN}
+        showSidebar={false}
+        eyebrow="Quản lý bài học"
+        title="Điều phối bài học"
+      >
         <section className="pageHeroCompact">
           <div>
-            <p className="eyebrow">UC riêng của giáo viên và quản trị viên</p>
-            <h2>Quản lý toàn bộ bài học, theo dõi trạng thái công bố và rà soát nội dung đi kèm.</h2>
+            <p className="eyebrow">{isAdmin ? 'Điều phối nội dung học tập' : 'Quản lý nội dung học tập'}</p>
+            <h2>
+              {isAdmin
+                ? 'Quản trị viên kiểm soát toàn bộ bài học, độ đầy đủ nội dung và trạng thái công bố.'
+                : 'Giáo viên quản lý toàn bộ bài học, theo dõi trạng thái công bố và rà soát nội dung đi kèm.'}
+            </h2>
             <p>
               Màn hình này hiển thị bài học theo lộ trình, giai đoạn, chủ đề, trạng thái và số lượng
               nhiệm vụ, từ vựng, ngữ pháp, tài nguyên và quiz liên kết.
@@ -473,13 +541,109 @@ export default function LessonsPage() {
           </div>
           <span className="inlineBadge">
             <LibraryBig size={16} />
-            {managementStats.totalLessons} bài
+            {visibleManagementLessons.length}/{managementStats.totalLessons} bài
           </span>
         </section>
 
         {error ? <div className="errorBox dashboardMessage">{error}</div> : null}
         {successMessage ? <div className="subtleBox dashboardMessage">{successMessage}</div> : null}
         {loading ? <div className="subtleBox dashboardMessage">Đang tải dữ liệu bài học...</div> : null}
+
+        <section className="lessonManagementFocus">
+          <div className="lessonManagementFocusCopy">
+            <p className="eyebrow">Bài học ưu tiên</p>
+            <h3>{focusManagementLesson ? focusManagementLesson.title : 'Chưa có bài học phù hợp bộ lọc'}</h3>
+            <p>
+              {focusManagementLesson
+                ? focusManagementLesson.description ?? 'Bài học này chưa có mô tả chi tiết.'
+                : 'Hãy đổi bộ lọc hoặc từ khóa tìm kiếm để xem bài học đang được ưu tiên xử lý.'}
+            </p>
+
+            {focusManagementLesson ? (
+              <>
+                <div className="progressJourneyBadges lessonManagementMeta">
+                  <span>
+                    <CheckCircle2 size={14} />
+                    {statusLabels[focusManagementLesson.status] ?? focusManagementLesson.status}
+                  </span>
+                  <span>
+                    <LibraryBig size={14} />
+                    {focusManagementLesson.pathName ?? 'Chưa gắn lộ trình'}
+                  </span>
+                  <span>
+                    <Layers3 size={14} />
+                    {focusManagementLesson.stageName ?? 'Chưa gắn giai đoạn'}
+                  </span>
+                  <span>
+                    <BookOpen size={14} />
+                    {focusManagementLesson.topicName ?? 'Chưa gắn chủ đề'}
+                  </span>
+                </div>
+
+                <div className="lessonManagementReadiness">
+                  <div>
+                    <div className="lessonManagementReadinessHead">
+                      <span>Khối lượng nội dung</span>
+                      <strong>{focusContentLoad}%</strong>
+                    </div>
+                    <div className="progressRail">
+                      <div className="progressFill" style={{ width: `${focusContentLoad}%` }} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="lessonManagementReadinessHead">
+                      <span>Quiz công bố</span>
+                      <strong>{focusQuizReadiness}%</strong>
+                    </div>
+                    <div className="progressRail">
+                      <div className="progressFill" style={{ width: `${focusQuizReadiness}%` }} />
+                    </div>
+                  </div>
+                </div>
+
+                {focusLessonWarnings.length ? (
+                  <div className="lessonManagementWarnings">
+                    {focusLessonWarnings.map((warning) => (
+                      <div key={warning}>
+                        <ShieldAlert size={14} />
+                        <span>{warning}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="subtleBox lessonManagementReady">
+                    Bài học đang ở trạng thái khá ổn: đủ cấu trúc và đã sẵn sàng tiếp tục chỉnh sửa nhỏ.
+                  </div>
+                )}
+              </>
+            ) : null}
+          </div>
+
+          <div className="lessonManagementSnapshot">
+            <article className="accent">
+              <span>Tổng bài</span>
+              <strong>{managementStats.totalLessons}</strong>
+              <small>Tổng lượng bài đang quản lý</small>
+            </article>
+            <article>
+              <span>Đã công bố</span>
+              <strong>{managementStats.publishedLessons}</strong>
+              <small>Bài sẵn sàng cho học viên</small>
+            </article>
+            <article>
+              <span>Bản nháp / ẩn</span>
+              <strong>{managementStats.draftLessons}</strong>
+              <small>Bài còn đang biên soạn</small>
+            </article>
+            <article>
+              <span>Nội dung công bố</span>
+              <strong>
+                {managementStats.lessonCoverage}% / {managementStats.quizCoverage}%
+              </strong>
+              <small>Tỉ lệ công bố bài học và quiz</small>
+            </article>
+          </div>
+        </section>
 
         <section className="lessonInsightGrid" aria-label="Tổng quan quản lý bài học">
           <div className="lessonInsightCard">
@@ -506,7 +670,7 @@ export default function LessonsPage() {
           </div>
         </section>
 
-        <section className="panel dashboardMessage">
+        <section className="lessonManagementToolbar panel dashboardMessage">
           <div className="sectionTitle">
             <div>
               <h2>Bộ lọc quản lý</h2>
@@ -582,11 +746,11 @@ export default function LessonsPage() {
           </div>
         </section>
 
-        <section className="panel dashboardMessage">
+        <section className="lessonManagementToolbar panel dashboardMessage">
           <div className="sectionTitle">
             <div>
               <h2>Tạo bài học mới</h2>
-              <span>Chọn giai đoạn hoặc chủ đề, rồi nhập nội dung chính để tạo bài.</span>
+              <span>Khởi tạo bài học theo đúng lộ trình, giai đoạn và chủ đề cần biên soạn.</span>
             </div>
             <span className="inlineBadge">
               <LibraryBig size={14} />
@@ -686,104 +850,230 @@ export default function LessonsPage() {
           </div>
         </section>
 
-        <section className="lessonManagementGrid">
-          {visibleManagementLessons.map((lesson) => (
-            <article className="lessonListCard lessonManagementCard" key={lesson.id}>
-              <div className="pathCardTop">
-                <div className="featureIcon">
-                  <LibraryBig size={20} />
-                </div>
-                <span className="inlineBadge">
-                  <CheckCircle2 size={14} />
-                  {statusLabels[lesson.status] ?? lesson.status}
+        <section className="lessonManagementWorkspace">
+          <aside className="lessonManagementRoster">
+            <div className="sectionTitle">
+              <div>
+                <h2>Danh sách bài học</h2>
+                <span>
+                  {visibleManagementLessons.length} / {managementLessons.length} bài học phù hợp bộ lọc
                 </span>
               </div>
+              <span className="inlineBadge">
+                <Sparkles size={14} />
+                {managementFilter === 'all'
+                  ? 'Tất cả'
+                  : managementFilter === 'published'
+                    ? 'Đã công bố'
+                    : 'Bản nháp / ẩn'}
+              </span>
+            </div>
 
-              <div>
-                <strong>{lesson.title}</strong>
-                <p>{lesson.description}</p>
-              </div>
+            <div className="lessonManagementGrid">
+              {visibleManagementLessons.map((lesson) => {
+                const contentLoad = Math.min(
+                  100,
+                  Math.max(
+                    8,
+                    Math.round(
+                      ((Number(lesson.tasksCount ?? 0) +
+                        Number(lesson.requiredTasksCount ?? 0) +
+                        Number(lesson.vocabCount ?? 0) +
+                        Number(lesson.grammarCount ?? 0) +
+                        Number(lesson.resourcesCount ?? 0) +
+                        Number(lesson.quizzesCount ?? 0)) /
+                        18) *
+                        100,
+                    ),
+                  ),
+                );
+                const activeLessonCard = focusManagementLesson?.id === lesson.id;
 
-              <div className="featureMeta">
-                <em>{lesson.pathName ?? 'Chưa gắn lộ trình'}</em>
-                <em>{lesson.stageName ?? 'Chưa gắn giai đoạn'}</em>
-                <em>{lesson.topicName ?? 'Chưa gắn chủ đề'}</em>
-                <em>{lesson.level ?? '--'}</em>
-              </div>
+                return (
+                  <article
+                    className={`lessonListCard lessonManagementCard ${activeLessonCard ? 'active' : ''}`}
+                    key={lesson.id}
+                  >
+                    <div className="pathCardTop">
+                      <div className="featureIcon">
+                        <LibraryBig size={20} />
+                      </div>
+                      <span className="inlineBadge">
+                        <CheckCircle2 size={14} />
+                        {statusLabels[lesson.status] ?? lesson.status}
+                      </span>
+                    </div>
 
-              <div className="progressRail" aria-label={`Mức độ nội dung của ${lesson.title}`}>
+                    <div>
+                      <strong>{lesson.title}</strong>
+                      <p>{lesson.description}</p>
+                    </div>
+
+                    <div className="featureMeta">
+                      <em>{lesson.pathName ?? 'Chưa gắn lộ trình'}</em>
+                      <em>{lesson.stageName ?? 'Chưa gắn giai đoạn'}</em>
+                      <em>{lesson.topicName ?? 'Chưa gắn chủ đề'}</em>
+                      <em>{lesson.level ?? '--'}</em>
+                    </div>
+
+                    <div className="progressRail" aria-label={`Mức độ nội dung của ${lesson.title}`}>
+                      <div className="progressFill" style={{ width: `${contentLoad}%` }} />
+                    </div>
+
+                    <div className="pathCardStats">
+                      <span>{lesson.tasksCount} nhiệm vụ</span>
+                      <span>{lesson.vocabCount} từ</span>
+                      <span>{lesson.quizzesCount} quiz</span>
+                    </div>
+
+                    <div className="featureMeta">
+                      <em>
+                        <Target size={14} />
+                        Đạt {lesson.passingScore}%
+                      </em>
+                      <em>{formatDateLabel(lesson.createdAt)}</em>
+                      <em>{formatDateLabel(lesson.updatedAt)}</em>
+                    </div>
+
+                    <div className="parentStudentActions">
+                      <button
+                        type="button"
+                        className="secondaryButton"
+                        onClick={() => setSelectedManagementLessonId(lesson.id)}
+                      >
+                        Xem nhanh
+                      </button>
+                      <button
+                        type="button"
+                        className="secondaryButton"
+                        disabled={lessonActionBusyId === lesson.id || lesson.status === 'CongBo'}
+                        onClick={() => void handleUpdateLessonStatus(lesson, 'CongBo')}
+                      >
+                        Công bố
+                      </button>
+                      <button
+                        type="button"
+                        className="secondaryButton"
+                        disabled={lessonActionBusyId === lesson.id || lesson.status === 'Nhap'}
+                        onClick={() => void handleUpdateLessonStatus(lesson, 'Nhap')}
+                      >
+                        Đưa về nháp
+                      </button>
+                      <button
+                        type="button"
+                        className="secondaryButton"
+                        disabled={lessonActionBusyId === lesson.id || lesson.status === 'An'}
+                        onClick={() => void handleUpdateLessonStatus(lesson, 'An')}
+                      >
+                        Ẩn
+                      </button>
+                    </div>
+
+                    <Link
+                      className="primaryButton fullWidth"
+                      href={`/lessons/${lesson.id}`}
+                      onClick={() => setSelectedManagementLessonId(lesson.id)}
+                    >
+                      Mở chi tiết quản lý
+                      <ArrowRight size={16} />
+                    </Link>
+                  </article>
+                );
+              })}
+
+              {!visibleManagementLessons.length && !loading ? (
+                <div className="subtleBox">Không có bài học nào khớp bộ lọc hiện tại.</div>
+              ) : null}
+            </div>
+          </aside>
+
+          <aside className="lessonManagementDetail">
+            {focusManagementLesson ? (
+              <section className="lessonManagementDetailHero">
+                <div className="lessonManagementDetailCopy">
+                  <p className="eyebrow">Chi tiết nhanh</p>
+                  <h3>{focusManagementLesson.title}</h3>
+                  <p>{focusManagementLesson.description ?? 'Bài học chưa có mô tả chi tiết.'}</p>
+                  <div className="progressJourneyBadges lessonManagementMeta">
+                    <span>
+                      <Compass size={14} />
+                      {focusManagementLesson.pathName ?? 'Chưa gắn lộ trình'}
+                    </span>
+                    <span>
+                      <Layers3 size={14} />
+                      {focusManagementLesson.stageName ?? 'Chưa gắn giai đoạn'}
+                    </span>
+                    <span>
+                      <BookOpen size={14} />
+                      {focusManagementLesson.topicName ?? 'Chưa gắn chủ đề'}
+                    </span>
+                    <span>
+                      <TrendingUp size={14} />
+                      Đạt {focusManagementLesson.passingScore}%
+                    </span>
+                  </div>
+                </div>
+
                 <div
-                  className="progressFill"
-                  style={{
-                    width: `${Math.max(
-                      Math.round(
-                        ((Number(lesson.tasksCount ?? 0) +
-                          Number(lesson.vocabCount ?? 0) +
-                          Number(lesson.grammarCount ?? 0) +
-                          Number(lesson.resourcesCount ?? 0) +
-                          Number(lesson.quizzesCount ?? 0)) /
-                          12) *
-                          100,
-                      ),
-                      8,
-                    )}%`,
-                  }}
-                />
-              </div>
-
-              <div className="pathCardStats">
-                <span>{lesson.tasksCount} nhiệm vụ</span>
-                <span>{lesson.vocabCount} từ</span>
-                <span>{lesson.quizzesCount} quiz</span>
-              </div>
-
-              <div className="featureMeta">
-                <em>
-                  <Target size={14} />
-                  Đạt {lesson.passingScore}%
-                </em>
-                <em>{formatDateLabel(lesson.createdAt)}</em>
-                <em>{formatDateLabel(lesson.updatedAt)}</em>
-              </div>
-
-              <div className="parentStudentActions">
-                <button
-                  type="button"
-                  className="secondaryButton"
-                  disabled={lessonActionBusyId === lesson.id || lesson.status === 'CongBo'}
-                  onClick={() => void handleUpdateLessonStatus(lesson, 'CongBo')}
+                  className="lessonManagementScore"
+                  style={{ '--score-fill': `${focusContentLoad}%` } as CSSProperties}
                 >
-                  Công bố
-                </button>
-                <button
-                  type="button"
-                  className="secondaryButton"
-                  disabled={lessonActionBusyId === lesson.id || lesson.status === 'Nhap'}
-                  onClick={() => void handleUpdateLessonStatus(lesson, 'Nhap')}
-                >
-                  Đưa về nháp
-                </button>
-                <button
-                  type="button"
-                  className="secondaryButton"
-                  disabled={lessonActionBusyId === lesson.id || lesson.status === 'An'}
-                  onClick={() => void handleUpdateLessonStatus(lesson, 'An')}
-                >
-                  Ẩn
-                </button>
+                  <strong>{focusContentLoad}%</strong>
+                  <small>khối lượng nội dung</small>
+                </div>
+              </section>
+            ) : null}
+
+            <div className="lessonManagementSnapshot">
+              <article>
+                <span>Nhiệm vụ</span>
+                <strong>{focusManagementLesson?.tasksCount ?? 0}</strong>
+                <small>{focusManagementLesson?.requiredTasksCount ?? 0} bắt buộc</small>
+              </article>
+              <article>
+                <span>Từ vựng</span>
+                <strong>{focusManagementLesson?.vocabCount ?? 0}</strong>
+                <small>Danh mục từ học kèm theo</small>
+              </article>
+              <article>
+                <span>Ngữ pháp</span>
+                <strong>{focusManagementLesson?.grammarCount ?? 0}</strong>
+                <small>Khối kiến thức ngữ pháp</small>
+              </article>
+              <article>
+                <span>Tài nguyên</span>
+                <strong>{focusManagementLesson?.resourcesCount ?? 0}</strong>
+                <small>File nghe, hình ảnh, tài liệu</small>
+              </article>
+              <article>
+                <span>Quiz</span>
+                <strong>{focusManagementLesson?.quizzesCount ?? 0}</strong>
+                <small>{focusManagementLesson?.publishedQuizzesCount ?? 0} quiz công bố</small>
+              </article>
+              <article>
+                <span>Thứ tự</span>
+                <strong>{focusManagementLesson?.lessonOrder ?? 0}</strong>
+                <small>Vị trí hiển thị trong chặng</small>
+              </article>
+            </div>
+
+            {focusLessonWarnings.length ? (
+              <div className="lessonManagementWarnings">
+                {focusLessonWarnings.map((warning) => (
+                  <div key={warning}>
+                    <ShieldAlert size={14} />
+                    <span>{warning}</span>
+                  </div>
+                ))}
               </div>
-
-              <Link className="primaryButton fullWidth" href={`/lessons/${lesson.id}`}>
-                Mở chi tiết quản lý
-                <ArrowRight size={16} />
-              </Link>
-            </article>
-          ))}
-
-          {!visibleManagementLessons.length && !loading ? (
-            <div className="subtleBox">Không có bài học nào khớp bộ lọc hiện tại.</div>
-          ) : null}
+            ) : (
+              <div className="subtleBox lessonManagementReady">
+                Bài học này đã đủ cấu trúc cơ bản và có thể tiếp tục tinh chỉnh nội dung chi tiết.
+              </div>
+            )}
+          </aside>
         </section>
+
       </AppShell>
     );
   }
@@ -792,7 +1082,7 @@ export default function LessonsPage() {
     <AppShell session={session} active="lessons" eyebrow={path?.name ?? 'Lessons'} title="Bài học">
       <section className="pageHeroCompact">
         <div>
-          <p className="eyebrow">UC4 - Xem danh sách bài học</p>
+          <p className="eyebrow">Danh sách bài học</p>
           <h2>
             {activeLesson
               ? `Bài nên học tiếp: ${activeLesson.title}`

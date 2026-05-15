@@ -248,6 +248,19 @@ const commonUseCases = [
   'Đăng xuất khỏi hệ thống',
 ];
 
+const contentHubSources = [
+  'Datamuse',
+  'LanguageTool',
+  'Tatoeba',
+  'Openverse',
+  'Wikimedia',
+  'Wikipedia',
+  'Free Dictionary',
+  'Merriam-Webster',
+  'Pixabay',
+  'Pexels',
+];
+
 const roleCommandItems: Record<
   UserRole,
   Array<{
@@ -286,7 +299,7 @@ const roleCommandItems: Record<
       href: '/playground',
       icon: Gamepad2,
       label: 'Sân chơi học tập',
-      text: 'Chơi mini game, chăm pet Pingu và dùng AI nhận diện hình ảnh.',
+      text: 'Chơi mini game, chăm pet Pingu, dùng AI Vision và khai thác Content Hub đa nguồn.',
     },
   ],
   [USER_ROLES.PARENT]: [
@@ -349,22 +362,40 @@ const roleCommandItems: Record<
   ],
   [USER_ROLES.ADMIN]: [
     {
-      href: '/students',
+      href: '/admin/users',
       icon: Users,
       label: 'Quản lý người dùng',
-      text: 'Theo dõi actor trong hệ thống và chuẩn bị mở rộng phân quyền.',
+      text: 'Tài khoản học viên, phụ huynh, giáo viên, trạng thái và phân quyền truy cập.',
     },
     {
-      href: '/learning-paths',
-      icon: ShieldCheck,
-      label: 'Duyệt nội dung',
-      text: 'Giám sát trạng thái công bố của lộ trình, bài học và quiz.',
+      href: '/admin/progress',
+      icon: ChartNoAxesCombined,
+      label: 'Giám sát học tập',
+      text: 'Theo dõi tiến độ, điểm quiz, học viên cần hỗ trợ và chất lượng vận hành.',
+    },
+    {
+      href: '/admin/learning-paths',
+      icon: BookOpen,
+      label: 'Quản lý lộ trình',
+      text: 'Duyệt lộ trình, trạng thái công bố, cấu trúc giai đoạn và độ sẵn sàng.',
+    },
+    {
+      href: '/admin/lessons',
+      icon: LibraryBig,
+      label: 'Quản lý bài học',
+      text: 'Rà soát bài học, task, từ vựng, ngữ pháp, audio, video và tài nguyên học.',
+    },
+    {
+      href: '/admin/quizzes',
+      icon: CheckCircle2,
+      label: 'Quản lý quiz',
+      text: 'Kiểm tra câu hỏi, điểm đạt, lượt làm, tỷ lệ vượt qua và trạng thái công bố.',
     },
     {
       href: '/admin',
       icon: Settings,
-      label: 'Giám sát hệ thống',
-      text: 'Xem số liệu tổng quan người dùng, học viên, phụ huynh, giáo viên và trạng thái hệ thống.',
+      label: 'Cấu hình hệ thống',
+      text: 'Theo dõi sức khỏe API, nhật ký vận hành, cấu hình nền tảng và dữ liệu hệ thống.',
     },
   ],
 };
@@ -1068,26 +1099,21 @@ export default function DashboardPage() {
   if (!session) {
     return (
       <main className="loadingShell">
-        <p>Đang chuyển hướng...</p>
+        <p>Đang mở bảng điều khiển...</p>
       </main>
     );
   }
 
   if (currentRole === USER_ROLES.STUDENT) {
     return (
-      <StudentDashboard
+      <StudentMenuDashboard
         session={session}
         learningPath={learningPath}
         lessons={studentLessons}
         progress={studentProgress}
         gameDashboard={gameDashboard}
-        loading={loading}
-        error={error}
-        dataMode={dataMode}
         averageProgress={averageProgress}
         completedCount={completedCount}
-        activeCount={activeCount}
-        lockedCount={lockedCount}
         bestScore={bestScore}
       />
     );
@@ -1117,7 +1143,6 @@ export default function DashboardPage() {
         session={session}
         learningPath={learningPath}
         teacherSupportSummary={teacherSupportSummary}
-        teacherStudents={teacherStudents}
         summary={summary}
         loading={loading}
         error={error}
@@ -1131,11 +1156,7 @@ export default function DashboardPage() {
   return (
     <AdminDashboard
       session={session}
-      learningPath={learningPath}
-      summary={summary}
-      loading={loading}
-      error={error}
-      dataMode={dataMode}
+      showSidebar={false}
       commandItems={commandItems}
       roleProfile={roleProfile}
     />
@@ -1600,6 +1621,263 @@ export default function DashboardPage() {
   */
 }
 
+function ContentHubSpotlight({ compact = false }: { compact?: boolean }) {
+  return (
+    <section className={`contentHubSpotlight ${compact ? 'compact' : ''}`} aria-label="AI Content Hub đa nguồn">
+      <div className="contentHubPixelStage" aria-hidden="true">
+        <span className="contentHubPixelSun" />
+        <span className="contentHubPixelCloud contentHubPixelCloudOne" />
+        <span className="contentHubPixelCloud contentHubPixelCloudTwo" />
+        <span className="contentHubPixelTree contentHubPixelTreeOne" />
+        <span className="contentHubPixelTree contentHubPixelTreeTwo" />
+        <span className="contentHubPixelPet contentHubPixelPetPenguin" />
+        <span className="contentHubPixelPet contentHubPixelPetRabbit" />
+        <span className="contentHubPixelPet contentHubPixelPetTurtle" />
+        <span className="contentHubPixelGround" />
+      </div>
+
+      <div className="contentHubSpotlightCopy">
+        <p className="eyebrow">AI Content Hub đã tích hợp</p>
+        <h2>Nguồn học liệu sống cho từ vựng, ngữ pháp, hình ảnh, audio, video và câu ví dụ.</h2>
+        <p>
+          Hệ thống đã nối nhiều API ngoài để làm giàu nội dung học: tra nghĩa, phát âm, ví dụ thật, kiểm tra ngữ pháp,
+          tìm ảnh minh họa, audio và video theo từ khóa.
+        </p>
+
+        <div className="contentHubSpotlightActions">
+          <Link className="primaryButton" href="/playground#playground-content-hub">
+            Mở Content Hub
+            <ArrowRight size={16} />
+          </Link>
+          <Link className="secondaryButton" href="/playground">
+            Vào sân chơi
+            <Gamepad2 size={16} />
+          </Link>
+        </div>
+      </div>
+
+      <div className="contentHubSourceCloud" aria-label="Nguồn dữ liệu đang tích hợp">
+        {contentHubSources.map((source) => (
+          <span key={source}>{source}</span>
+        ))}
+      </div>
+
+      <div className="contentHubSpotlightStats" aria-label="Nhóm dữ liệu học tập">
+        <div>
+          <strong>10+</strong>
+          <span>Nguồn API</span>
+        </div>
+        <div>
+          <strong>6</strong>
+          <span>Loại học liệu</span>
+        </div>
+        <div>
+          <strong>Live</strong>
+          <span>Dữ liệu ngoài</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StudentMenuDashboard({
+  session,
+  learningPath,
+  lessons,
+  progress,
+  gameDashboard,
+  averageProgress,
+  completedCount,
+  bestScore,
+}: {
+  session: WebAuthSession;
+  learningPath: LearningPathDetail | null;
+  lessons: Array<LearningPathDetail['stages'][number]['lessons'][number] & { stageName: string; stageOrder: number }>;
+  progress: StudentProgressRow[];
+  gameDashboard: GameDashboard | null;
+  averageProgress: number;
+  completedCount: number;
+  bestScore: number;
+}) {
+  const progressByLesson = useMemo(
+    () =>
+      new Map(
+        progress.map((item) => [
+          item.lessonId,
+          {
+            ...item,
+            percentComplete: Number(item.percentComplete ?? 0),
+            bestScore: Number(item.bestScore ?? 0),
+          },
+        ]),
+      ),
+    [progress],
+  );
+
+  const firstOpenLesson = useMemo(
+    () =>
+      lessons.find((lesson) => {
+        const progressRow = progressByLesson.get(lesson.id);
+        const isFirstLesson = lesson.stageOrder === 1 && lesson.orderIndex === 1;
+        const status = progressRow?.status ?? (isFirstLesson ? 'ChuaHoc' : 'BiKhoa');
+
+        return status !== 'BiKhoa' && status !== 'HoanThanh';
+      }) ??
+      lessons.find((lesson) => progressByLesson.get(lesson.id)?.status !== 'BiKhoa') ??
+      lessons[0] ??
+      null,
+    [lessons, progressByLesson],
+  );
+
+  const pet = gameDashboard?.pet ?? null;
+  const studentUseCaseItems = [
+    {
+      href: '/learning-paths',
+      icon: BookOpen,
+      label: 'Xem lộ trình học',
+      text: 'Theo dõi lộ trình, giai đoạn, bài đang mở và điều kiện mở khóa.',
+    },
+    {
+      href: '/lessons',
+      icon: LibraryBig,
+      label: 'Xem danh sách bài học',
+      text: 'Duyệt toàn bộ bài học theo lộ trình, chủ đề, trạng thái và mức độ.',
+    },
+    {
+      href: firstOpenLesson ? `/lessons/${firstOpenLesson.id}` : '/lessons',
+      icon: PlayCircle,
+      label: 'Học bài học chi tiết',
+      text: 'Vào màn học chính với nhiệm vụ, từ vựng, ngữ pháp và tài nguyên.',
+    },
+    {
+      href: firstOpenLesson ? `/lessons/${firstOpenLesson.id}#audio` : '/lessons',
+      icon: Activity,
+      label: 'Nghe audio và phát âm',
+      text: 'Mở phần luyện nghe, câu mẫu, phát âm và ví dụ minh họa trong bài.',
+    },
+    {
+      href: '/quizzes',
+      icon: CheckCircle2,
+      label: 'Làm bài kiểm tra',
+      text: 'Làm quiz, xem điểm, đạt ngưỡng qua bài và nhận thưởng học tập.',
+    },
+    {
+      href: '/progress',
+      icon: ChartNoAxesCombined,
+      label: 'Xem tiến trình cá nhân',
+      text: 'Kiểm tra phần trăm hoàn thành, điểm cao nhất và bài cần tiếp tục.',
+    },
+    {
+      href: '/playground',
+      icon: Gamepad2,
+      label: 'Sân chơi học tập',
+      text: 'Chơi mini game, chăm pet Pingu, làm nhiệm vụ ngày và AI hình ảnh.',
+    },
+  ];
+
+  return (
+    <AppShell
+      session={session}
+      active="dashboard"
+      roleContext={USER_ROLES.STUDENT}
+      showSidebar={false}
+      eyebrow="Không gian học viên"
+      title="Trung tâm học tập"
+    >
+      <section className="panel adminMenuPanel studentMenuPanel" aria-label="Chọn chức năng học viên">
+        <div className="adminMenuHero studentMenuHero">
+          <div className="adminMenuHeroCopy">
+            <p className="eyebrow">Xin chào, {session.user.fullName}</p>
+            <h2>Chọn cổng học tập của bạn</h2>
+            <p>
+              Dashboard học viên chỉ giữ các nút chức năng chính. Mỗi chức năng mở sang một trang riêng để học, làm
+              quiz, xem tiến trình hoặc vào sân chơi.
+            </p>
+            <div className="adminMenuChips" aria-hidden="true">
+              <span>
+                <BookOpen size={14} />
+                {learningPath?.level ?? 'A1'} Path
+              </span>
+              <span>
+                <Sparkles size={14} />
+                {averageProgress}% tiến độ
+              </span>
+              <span>
+                <Gamepad2 size={14} />
+                {pet ? `${pet.name} cấp ${pet.level}` : 'Pet Pingu'}
+              </span>
+            </div>
+          </div>
+
+          <div className="studentMenuScene" aria-hidden="true">
+            <span className="studentSceneSun" />
+            <span className="studentSceneCloud studentSceneCloudOne" />
+            <span className="studentSceneCloud studentSceneCloudTwo" />
+            <span className="studentSceneHill studentSceneHillOne" />
+            <span className="studentSceneHill studentSceneHillTwo" />
+            <span className="studentSceneRail" />
+            <span className="studentSceneTree studentSceneTreeOne" />
+            <span className="studentSceneTree studentSceneTreeTwo" />
+            <span className="studentSceneMascot studentSceneRabbit" />
+            <span className="studentSceneMascot studentScenePingu" />
+            <span className="studentSceneMascot studentSceneTurtle" />
+            <span className="studentSceneLeaf studentSceneLeafOne" />
+            <span className="studentSceneLeaf studentSceneLeafTwo" />
+          </div>
+        </div>
+
+        <div className="studentMenuStats" aria-label="Tóm tắt học tập nhanh">
+          <div className="studentMenuStat">
+            <span>Lộ trình</span>
+            <strong>{learningPath?.name ?? 'Chưa mở'}</strong>
+          </div>
+          <div className="studentMenuStat">
+            <span>Hoàn thành</span>
+            <strong>
+              {completedCount}/{lessons.length}
+            </strong>
+          </div>
+          <div className="studentMenuStat">
+            <span>Tiến độ</span>
+            <strong>{averageProgress}%</strong>
+          </div>
+          <div className="studentMenuStat">
+            <span>Điểm cao nhất</span>
+            <strong>{bestScore}%</strong>
+          </div>
+        </div>
+
+        <div className="sectionTitle adminMenuHeading">
+          <div>
+            <h2>Chọn chức năng để mở trang riêng</h2>
+            <span>Không còn trộn giao diện chi tiết vào dashboard học viên.</span>
+          </div>
+        </div>
+
+        <div className="adminMenuGrid studentMenuGrid">
+          {studentUseCaseItems.map((item, index) => {
+            const Icon = item.icon;
+            return (
+              <Link
+                className="adminMenuCard studentMenuCard"
+                href={item.href}
+                key={`student:${item.href}:${item.label}`}
+              >
+                <span className="adminMenuCardIndex">{String(index + 1).padStart(2, '0')}</span>
+                <span className="adminMenuCardIcon">
+                  <Icon size={20} />
+                </span>
+                <strong>{item.label}</strong>
+                <small>{item.text}</small>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+    </AppShell>
+  );
+}
+
 function StudentDashboard({
   session,
   learningPath,
@@ -1755,6 +2033,7 @@ function StudentDashboard({
     <AppShell
       session={session}
       active="dashboard"
+      roleContext={USER_ROLES.STUDENT}
       eyebrow={learningPath?.name ?? 'Không gian học viên'}
       title="Dashboard học viên"
     >
@@ -1835,6 +2114,8 @@ function StudentDashboard({
         <Metric icon={Activity} label="Đang mở" value={unlockedLessons || activeCount} />
         <Metric icon={Award} label="Điểm cao nhất" value={bestScore} />
       </section>
+
+      <ContentHubSpotlight />
 
       <section className="studentDashboardGrid">
         <div className="panel studentPlanPanel">
@@ -2180,7 +2461,13 @@ function ParentDashboard({
   ];
 
   return (
-    <AppShell session={session} active="dashboard" eyebrow={learningPath?.name ?? 'Cổng phụ huynh'} title="Theo dõi học viên">
+    <AppShell
+      session={session}
+      active="dashboard"
+      roleContext={USER_ROLES.PARENT}
+      eyebrow={learningPath?.name ?? 'Cổng phụ huynh'}
+      title="Theo dõi học viên"
+    >
       <section className="parentHero">
         <div className="parentHeroCopy">
           <p className="eyebrow">Xin chào, {session.user.fullName}</p>
@@ -2386,7 +2673,6 @@ function TeacherDashboard({
   session,
   learningPath,
   teacherSupportSummary,
-  teacherStudents,
   summary,
   loading,
   error,
@@ -2405,7 +2691,6 @@ function TeacherDashboard({
     bestQuizScore: number;
     bestStreak: number;
   };
-  teacherStudents: LinkedStudent[];
   summary: Summary | null;
   loading: boolean;
   error: string;
@@ -2421,182 +2706,118 @@ function TeacherDashboard({
   const pathCount = summary?.totalPublishedPaths ?? 0;
   const lessonCount = summary?.totalPublishedLessons ?? 0;
   const quizCount = summary?.totalPublishedQuizzes ?? 0;
+  const teacherStats = [
+    {
+      label: 'Học viên',
+      value: teacherSupportSummary.totalStudents,
+      note: 'Đang theo dõi',
+    },
+    {
+      label: 'Cần hỗ trợ',
+      value: teacherSupportSummary.urgentStudents.length,
+      note: 'Ưu tiên hôm nay',
+    },
+    {
+      label: 'Tiến độ TB',
+      value: `${teacherSupportSummary.averageTeacherProgress}%`,
+      note: 'Toàn lớp',
+    },
+    {
+      label: 'Nội dung',
+      value: pathCount + lessonCount + quizCount,
+      note: 'Đang công bố',
+    },
+  ];
 
   return (
-    <AppShell session={session} active="dashboard" eyebrow={learningPath?.name ?? 'Cổng giáo viên'} title="Vận hành lớp học">
-      <section className="actorManagementGrid">
-        <div className="roleOverviewIntro">
-          <p className="eyebrow">Xin chào, {session.user.fullName}</p>
-          <h3>Trạm vận hành lớp học và nội dung</h3>
-          <p>
-            Giáo viên tập trung theo dõi lớp, rà soát nội dung, phát hiện học viên cần hỗ trợ và điều chỉnh
-            lộ trình học cho phù hợp.
-          </p>
+    <AppShell
+      session={session}
+      active="dashboard"
+      roleContext={USER_ROLES.TEACHER}
+      showSidebar={false}
+      eyebrow="Teacher hub"
+      title="Trung tâm giáo viên"
+    >
+      <section className="panel adminMenuPanel teacherMenuPanel" aria-label="Chọn chức năng giáo viên">
+        <div className="adminMenuHero teacherMenuHero">
+          <div className="adminMenuHeroCopy">
+            <p className="eyebrow">Xin chào, {session.user.fullName}</p>
+            <h2>Điều phối lớp học từ từng trang riêng</h2>
+            <p>
+              Dashboard giáo viên chỉ giữ các cổng nghiệp vụ chính. Khi cần quản lý lộ trình, bài học,
+              quiz, học viên hoặc tiến trình, giáo viên mở đúng trang chức năng tương ứng.
+            </p>
+            <div className="adminMenuChips" aria-hidden="true">
+              <span>
+                <Users size={14} />
+                {teacherSupportSummary.totalStudents} học viên
+              </span>
+              <span>
+                <ShieldCheck size={14} />
+                {roleProfile.badge}
+              </span>
+              <span>
+                <BookOpen size={14} />
+                {learningPath?.level ?? 'A1'} content
+              </span>
+            </div>
+          </div>
+
+          <div className="teacherMenuScene" aria-hidden="true">
+            <span className="teacherSceneBoard" />
+            <span className="teacherSceneGraph teacherSceneGraphOne" />
+            <span className="teacherSceneGraph teacherSceneGraphTwo" />
+            <span className="teacherSceneGraph teacherSceneGraphThree" />
+            <span className="teacherSceneDesk" />
+            <span className="teacherSceneBook teacherSceneBookOne" />
+            <span className="teacherSceneBook teacherSceneBookTwo" />
+            <span className="teacherSceneMascot" />
+            <span className="teacherSceneSpark teacherSceneSparkOne" />
+            <span className="teacherSceneSpark teacherSceneSparkTwo" />
+            <span className="teacherSceneSpark teacherSceneSparkThree" />
+            <span className="teacherSceneLine teacherSceneLineOne" />
+            <span className="teacherSceneLine teacherSceneLineTwo" />
+          </div>
         </div>
-        <div className="roleOverviewStack">
-          <div className="roleOverviewItem">
-            <Users size={16} />
-            <span>{teacherSupportSummary.urgentStudents.length} học viên cần hỗ trợ ngay.</span>
-          </div>
-          <div className="roleOverviewItem">
-            <BookOpen size={16} />
-            <span>{lessonCount} bài học công bố đang sẵn sàng vận hành.</span>
-          </div>
-          <div className="roleOverviewItem">
-            <ShieldCheck size={16} />
-            <span>{quizCount} quiz công bố và {pathCount} lộ trình đã mở.</span>
-          </div>
+
+        <div className="studentMenuStats teacherMenuStats" aria-label="Tóm tắt vận hành giáo viên">
+          {teacherStats.map((item) => (
+            <div className="studentMenuStat teacherMenuStat" key={item.label}>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+              <em>{item.note}</em>
+            </div>
+          ))}
         </div>
-      </section>
 
-      {error ? <div className="errorBox dashboardMessage">{error}</div> : null}
-      {dataMode === 'demo' ? <div className="subtleBox dashboardMessage">Đang hiển thị dữ liệu mẫu vì backend chưa phản hồi.</div> : null}
-      {loading ? <div className="subtleBox dashboardMessage">Đang đồng bộ dữ liệu giáo viên...</div> : null}
+        {error ? <div className="errorBox dashboardMessage">{error}</div> : null}
+        {dataMode === 'demo' ? (
+          <div className="subtleBox dashboardMessage">Đang hiển thị dữ liệu mẫu vì backend chưa phản hồi.</div>
+        ) : null}
+        {loading ? <div className="subtleBox dashboardMessage">Đang đồng bộ dữ liệu giáo viên...</div> : null}
 
-      <section className="metricGrid" aria-label="Chỉ số giáo viên">
-        <Metric icon={Users} label="Học viên" value={teacherSupportSummary.totalStudents} note="Trong lớp đang theo dõi" />
-        <Metric icon={ShieldCheck} label="Cần hỗ trợ" value={teacherSupportSummary.urgentStudents.length} note="Nhóm ưu tiên" />
-        <Metric icon={TrendingUp} label="Tiến độ TB" value={`${teacherSupportSummary.averageTeacherProgress}%`} note="Nhịp học trung bình" />
-        <Metric icon={Award} label="Điểm quiz cao nhất" value={`${Math.round(teacherSupportSummary.bestQuizScore)}%`} note="Kết quả nổi bật" />
-      </section>
-
-      <section className="parentReviewPanel panel" aria-label="Cảnh báo lớp học">
-        <div className="sectionTitle">
+        <div className="sectionTitle adminMenuHeading">
           <div>
-            <p className="eyebrow">UC6 • Theo dõi lớp học</p>
-            <h2>Học viên cần hỗ trợ và lớp đang vận hành</h2>
-            <span>Giáo viên nhìn nhanh ai đang chậm tiến độ, ai ổn định, và mở báo cáo ngay.</span>
-          </div>
-          <span className="inlineBadge">
-            <Users size={14} />
-            {teacherSupportSummary.totalStudents} học viên
-          </span>
-        </div>
-
-        <div className="parentReviewList">
-          {teacherSupportSummary.focusStudents.slice(0, 4).map((student) => {
-            const band = getTeacherSupportBand(student);
-            const isUrgent = band === 'needs-support';
-
-            return (
-              <article className={`parentReviewCard priority-${isUrgent ? 1 : 2}`} key={student.id}>
-                <div className="parentReviewCardHead">
-                  <div>
-                    <p className="eyebrow">{student.currentLevel ?? 'Chưa rõ cấp độ'}</p>
-                    <strong>{student.fullName}</strong>
-                    <span>
-                      {student.learningGoal ?? 'Chưa cập nhật mục tiêu'} • {student.completedLessons} bài hoàn thành
-                    </span>
-                  </div>
-                  <span className={`parentReviewStatus ${isUrgent ? 'ChuaXem' : 'DaXem'}`}>
-                    {getTeacherSupportLabel(student)}
-                  </span>
-                </div>
-
-                <div className="parentReviewMeta">
-                  <span>
-                    <TrendingUp size={14} />
-                    {Math.round(Number(student.averageProgress ?? 0))}% tiến độ
-                  </span>
-                  <span>
-                    <BookOpen size={14} />
-                    {student.activeLessons} bài đang học
-                  </span>
-                  <span>
-                    <ShieldCheck size={14} />
-                    {student.lockedLessons} bài khóa
-                  </span>
-                  <span>
-                    <Award size={14} />
-                    {Math.round(Number(student.bestQuizScore ?? 0))}% quiz cao nhất
-                  </span>
-                </div>
-
-                <div className="parentReviewActions">
-                  <div className="progressRail">
-                    <div className="progressFill" style={{ width: `${Math.min(100, Math.max(0, Number(student.averageProgress ?? 0)))}%` }} />
-                  </div>
-                  <Link className="secondaryButton" href={`/progress?studentId=${student.id}`}>
-                    Xem tiến trình
-                    <ArrowRight size={14} />
-                  </Link>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="studentDashboardGrid">
-        <div className="panel">
-          <div className="sectionTitle">
-            <div>
-              <h2>Người học đang theo dõi</h2>
-              <span>Danh sách lớp theo tiến độ và mức cần hỗ trợ</span>
-            </div>
-            <span className="inlineBadge">
-              <Users size={14} />
-              {teacherStudents.length} học viên
-            </span>
-          </div>
-
-          <div className="studentHealthList">
-            {teacherStudents.slice(0, 4).map((student) => (
-              <div className={`studentHealthItem ${isStudentNeedingSupport(student) ? 'CanXuLy' : 'Tot'}`} key={student.id}>
-                <CheckCircle2 size={16} />
-                <div>
-                  <strong>{student.fullName}</strong>
-                  <small>
-                    {student.currentLevel ?? 'Chưa rõ'} • {Math.round(Number(student.averageProgress ?? 0))}% • {student.learningStreak} ngày
-                  </small>
-                </div>
-              </div>
-            ))}
+            <h2>Chọn chức năng để mở trang riêng</h2>
+            <span>Dashboard không còn trộn màn lớp học, nội dung và báo cáo vào chung một trang.</span>
           </div>
         </div>
 
-        <div className="panel">
-          <div className="sectionTitle">
-            <div>
-              <h2>Quản lý nội dung</h2>
-              <span>{roleProfile.badge} • cập nhật lộ trình, bài học và quiz</span>
-            </div>
-          </div>
-          <div className="adminOverviewNotes">
-            <div>
-              <strong>Lộ trình</strong>
-              <span>{summary?.totalPublishedPaths ?? 0} lộ trình công bố đang mở.</span>
-            </div>
-            <div>
-              <strong>Bài học</strong>
-              <span>{summary?.totalPublishedLessons ?? 0} bài học công bố sẵn sàng.</span>
-            </div>
-            <div>
-              <strong>Quiz</strong>
-              <span>{summary?.totalPublishedQuizzes ?? 0} quiz công bố đang vận hành.</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="panel commandCenter" aria-label="Đi tới chức năng">
-        <div className="sectionTitle">
-          <div>
-            <h2>Đi tới chức năng</h2>
-            <span>Giáo viên vào đúng chỗ để chỉnh nội dung và theo dõi học viên</span>
-          </div>
-        </div>
-        <div className="commandGrid">
-          {commandItems.map((item) => {
+        <div className="adminMenuGrid teacherMenuGrid">
+          {commandItems.map((item, index) => {
             const Icon = item.icon;
             return (
-              <Link className="commandCard" href={item.href} key={`teacher:${item.href}:${item.label}`}>
-                <Icon size={20} />
-                <div>
-                  <strong>{item.label}</strong>
-                  <span>{item.text}</span>
-                </div>
-                <ArrowRight size={16} />
+              <Link
+                className="adminMenuCard teacherMenuCard"
+                href={item.href}
+                key={`teacher:${item.href}:${item.label}`}
+              >
+                <span className="adminMenuCardIndex">{String(index + 1).padStart(2, '0')}</span>
+                <span className="adminMenuCardIcon">
+                  <Icon size={20} />
+                </span>
+                <strong>{item.label}</strong>
+                <small>{item.text}</small>
               </Link>
             );
           })}
@@ -2608,20 +2829,12 @@ function TeacherDashboard({
 
 function AdminDashboard({
   session,
-  learningPath,
-  summary,
-  loading,
-  error,
-  dataMode,
+  showSidebar,
   commandItems,
   roleProfile,
 }: {
   session: WebAuthSession;
-  learningPath: LearningPathDetail | null;
-  summary: Summary | null;
-  loading: boolean;
-  error: string;
-  dataMode: 'live' | 'demo';
+  showSidebar: boolean;
   commandItems: Array<{
     href: string;
     icon: ComponentType<{ size?: number }>;
@@ -2631,115 +2844,90 @@ function AdminDashboard({
   roleProfile: RoleProfile;
 }) {
   return (
-    <AppShell session={session} active="dashboard" eyebrow={learningPath?.name ?? 'Trung tâm quản trị'} title="Điều phối hệ thống">
-      <section className="adminOverviewPanel panel">
-        <div className="sectionTitle">
-          <div>
+    <AppShell
+      session={session}
+      active="dashboard"
+      roleContext={USER_ROLES.ADMIN}
+      showSidebar={showSidebar}
+      eyebrow="Control hub"
+      title="Trung tâm quản trị"
+    >
+      <section className="panel adminMenuPanel" aria-label="Đi tới chức năng">
+        <div className="adminMenuHero">
+          <div className="adminMenuHeroCopy">
             <p className="eyebrow">Xin chào, {session.user.fullName}</p>
-            <h2>Trung tâm điều phối hệ thống</h2>
-            <span>
-              Quản trị viên kiểm soát tài khoản, nội dung công bố, trạng thái vận hành và các actor trong hệ thống.
+            <h2>Trung tâm điều phối EnglishPro</h2>
+            <p>Dashboard quản trị chỉ giữ các cổng chức năng chính, mỗi cổng mở sang một màn hình nghiệp vụ riêng.</p>
+            <div className="adminMenuChips" aria-hidden="true">
+              <span>
+                <Settings size={14} />
+                Điều phối
+              </span>
+              <span>
+                <Sparkles size={14} />
+                Live content
+              </span>
+              <span>
+                <ShieldCheck size={14} />
+                Quản trị viên
+              </span>
+            </div>
+          </div>
+
+          <div className="adminMenuScene" aria-hidden="true">
+            <span className="adminSceneFrame" />
+            <span className="adminScenePixelGround" />
+            <span className="adminScenePixelTower adminScenePixelTowerOne" />
+            <span className="adminScenePixelTower adminScenePixelTowerTwo" />
+            <span className="adminScenePixelTree adminScenePixelTreeOne" />
+            <span className="adminScenePixelTree adminScenePixelTreeTwo" />
+            <span className="adminScenePixelMascot">
+              <span />
             </span>
+            <span className="adminSceneRidge adminSceneRidgeOne" />
+            <span className="adminSceneRidge adminSceneRidgeTwo" />
+            <span className="adminSceneRidge adminSceneRidgeThree" />
+            <span className="adminSceneGlow adminSceneGlowOne" />
+            <span className="adminSceneGlow adminSceneGlowTwo" />
+            <span className="adminScenePulse adminScenePulseOne" />
+            <span className="adminScenePulse adminScenePulseTwo" />
+            <span className="adminSceneBoard" />
+            <span className="adminSceneCard adminSceneCardOne" />
+            <span className="adminSceneCard adminSceneCardTwo" />
+            <span className="adminSceneCard adminSceneCardThree" />
+            <span className="adminSceneLine adminSceneLineOne" />
+            <span className="adminSceneLine adminSceneLineTwo" />
+            <span className="adminSceneLine adminSceneLineThree" />
+            <span className="adminSceneDot adminSceneDotOne" />
+            <span className="adminSceneDot adminSceneDotTwo" />
+            <span className="adminSceneDot adminSceneDotThree" />
+            <span className="adminSceneOrbit adminSceneOrbitOne" />
+            <span className="adminSceneOrbit adminSceneOrbitTwo" />
           </div>
-          <span className="inlineBadge">
-            <Settings size={14} />
-            {roleProfile.badge}
-          </span>
         </div>
 
-        <div className="adminOverviewNotes">
+        <ContentHubSpotlight compact />
+
+        <div className="sectionTitle adminMenuHeading">
           <div>
-            <strong>Người dùng</strong>
-            <span>{summary?.totalUsers ?? 0} tài khoản đang được quản lý.</span>
-          </div>
-          <div>
-            <strong>Chất lượng nội dung</strong>
-            <span>{summary?.totalPublishedPaths ?? 0}/{summary?.totalPaths ?? 0} lộ trình công bố.</span>
-          </div>
-          <div>
-            <strong>Tình trạng hệ thống</strong>
-            <span>{dataMode === 'demo' ? 'Dữ liệu mẫu đang hiển thị' : 'Backend đang phản hồi bình thường'}</span>
-          </div>
-        </div>
-      </section>
-
-      {error ? <div className="errorBox dashboardMessage">{error}</div> : null}
-      {dataMode === 'demo' ? <div className="subtleBox dashboardMessage">Đang hiển thị dữ liệu mẫu vì backend chưa phản hồi.</div> : null}
-      {loading ? <div className="subtleBox dashboardMessage">Đang đồng bộ dữ liệu quản trị...</div> : null}
-
-      <section className="metricGrid adminMetricGrid" aria-label="Chỉ số quản trị">
-        <Metric icon={Users} label="Người dùng" value={summary?.totalUsers ?? 0} note="Toàn bộ tài khoản" />
-        <Metric icon={LibraryBig} label="Lộ trình" value={summary?.totalPaths ?? 0} note="Nội dung học tập" />
-        <Metric icon={BookOpen} label="Bài học" value={summary?.totalLessons ?? 0} note="Tổng bài đang có" />
-        <Metric icon={CheckCircle2} label="Quiz" value={summary?.totalQuizzes ?? 0} note="Bộ kiểm tra hiện có" />
-      </section>
-
-      <section className="studentDashboardGrid">
-        <div className="panel">
-          <div className="sectionTitle">
-            <div>
-              <h2>Kiểm soát nội dung</h2>
-              <span>Quản trị viên xem trạng thái công bố và khối lượng nội dung</span>
-            </div>
-          </div>
-          <div className="adminOverviewNotes">
-            <div>
-              <strong>Lộ trình công bố</strong>
-              <span>{summary?.totalPublishedPaths ?? 0} lộ trình đã sẵn sàng.</span>
-            </div>
-            <div>
-              <strong>Bài học công bố</strong>
-              <span>{summary?.totalPublishedLessons ?? 0} bài học đang hoạt động.</span>
-            </div>
-            <div>
-              <strong>Quiz công bố</strong>
-              <span>{summary?.totalPublishedQuizzes ?? 0} quiz đang phục vụ học viên.</span>
-            </div>
+            <h2>Chọn một chức năng để mở trang riêng</h2>
           </div>
         </div>
 
-        <div className="panel">
-          <div className="sectionTitle">
-            <div>
-              <h2>Điều phối actor</h2>
-              <span>Quản lý người dùng, phân quyền và giám sát hệ thống</span>
-            </div>
-          </div>
-          <div className="roleOverviewStack">
-            <div className="roleOverviewItem">
-              <Users size={16} />
-              <span>Quản lý học viên, phụ huynh, giáo viên và tài khoản nội bộ.</span>
-            </div>
-            <div className="roleOverviewItem">
-              <ShieldCheck size={16} />
-              <span>Phân quyền truy cập và kiểm soát vai trò người dùng.</span>
-            </div>
-            <div className="roleOverviewItem">
-              <Sparkles size={16} />
-              <span>Giám sát nội dung công bố trước khi đưa ra người học.</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="panel commandCenter" aria-label="Đi tới chức năng">
-        <div className="sectionTitle">
-          <div>
-            <h2>Đi tới chức năng</h2>
-            <span>Các lối tắt quản trị hệ thống</span>
-          </div>
-        </div>
-        <div className="commandGrid">
-          {commandItems.map((item) => {
+        <div className="adminMenuGrid">
+          {commandItems.map((item, index) => {
             const Icon = item.icon;
             return (
-              <Link className="commandCard" href={item.href} key={`admin:${item.href}:${item.label}`}>
-                <Icon size={20} />
-                <div>
-                  <strong>{item.label}</strong>
-                  <span>{item.text}</span>
-                </div>
-                <ArrowRight size={16} />
+              <Link
+                className="adminMenuCard"
+                href={item.href}
+                key={`admin:${item.href}:${item.label}`}
+              >
+                <span className="adminMenuCardIndex">{String(index + 1).padStart(2, '0')}</span>
+                <span className="adminMenuCardIcon">
+                  <Icon size={20} />
+                </span>
+                <strong>{item.label}</strong>
               </Link>
             );
           })}

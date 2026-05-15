@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
+import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { LearningPathsModule } from './modules/learning-paths/learning-paths.module';
 import { LessonsModule } from './modules/lessons/lessons.module';
 import { GamificationModule } from './modules/gamification/gamification.module';
@@ -20,6 +22,8 @@ import { DatabaseModule } from './database/database.module';
     }),
     DatabaseModule,
     HealthModule,
+    AdminModule,
+    IntegrationsModule,
     AuthModule,
     UsersModule,
     LearningPathsModule,

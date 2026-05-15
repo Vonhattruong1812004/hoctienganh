@@ -10,6 +10,7 @@ import {
   Heart,
   PlayCircle,
   Sparkles,
+  PawPrint,
   Target,
   Trophy,
   Upload,
@@ -17,7 +18,9 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ContentHubPanel } from '../../components/content-hub-panel';
 import { PetMascot } from '../../components/pet-mascot';
+import { PetGarden } from '../../components/pet-garden';
 import { ThemeToggleButton } from '../../components/theme-toggle';
 import { ApiError, apiGet, apiPost, apiPostForm } from '../../lib/api';
 import { getStoredSession, type WebAuthSession } from '../../lib/session';
@@ -531,7 +534,7 @@ export default function PlaygroundPage() {
   if (!session) {
     return (
       <main className="loadingShell">
-        <p>Đang chuyển hướng...</p>
+        <p>Đang tải sân chơi...</p>
       </main>
     );
   }
@@ -574,6 +577,14 @@ export default function PlaygroundPage() {
             <button className="iconButton" type="button" onClick={() => scrollToSection('playground-games')}>
               <Gamepad2 size={16} />
               Chơi mini game
+            </button>
+            <button className="iconButton" type="button" onClick={() => scrollToSection('playground-pets')}>
+              <PawPrint size={16} />
+              Bộ pet
+            </button>
+            <button className="iconButton" type="button" onClick={() => scrollToSection('playground-content-hub')}>
+              <Sparkles size={16} />
+              Kho API
             </button>
             <button className="iconButton" type="button" onClick={() => scrollToSection('playground-vision')}>
               <ScanSearch size={16} />
@@ -874,6 +885,10 @@ export default function PlaygroundPage() {
           </div>
         </div>
       </section>
+
+      <PetGarden />
+
+      <ContentHubPanel token={session.accessToken} />
 
       <section id="playground-vision" className="visionPanel panel">
         <div className="sectionTitle">

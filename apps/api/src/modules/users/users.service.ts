@@ -3,6 +3,7 @@ import { PrismaService } from '../../database/prisma.service';
 import type { AuthUser } from '../auth/auth.types';
 import { CreateStudentSupportDto } from './dto/create-student-support.dto';
 import { UpdateStudentSupportStatusDto } from './dto/update-student-support-status.dto';
+import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 
 type FocusLessonRow = {
   id: string;
@@ -27,6 +28,31 @@ type SupportSuggestionRow = {
   progressStatus: string;
   progressPercent: number;
   bestScore: number;
+};
+
+type AdminAccountRow = {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string | null;
+  avatar: string | null;
+  birthDate: string | null;
+  gender: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  roles: string[];
+  studentCount: number;
+  linkedParentCount: number;
+  totalPoints: number;
+  streak: number;
+  avgProgress: number;
+  lastQuizAt: string | null;
+  activeLessons: number;
+  lockedLessons: number;
+  publishedPaths: number;
+  publishedLessons: number;
+  publishedQuizzes: number;
 };
 
 @Injectable()
@@ -174,6 +200,107 @@ export class UsersService {
     };
   }
 
+  async getAdminAccounts() {
+    return this.prisma.$queryRaw<AdminAccountRow[]>`
+      SELECT
+        nd."maNguoiDung" AS id,
+        nd."hoTen" AS "fullName",
+        nd."email" AS email,
+        nd."soDienThoai" AS phone,
+        nd."anhDaiDien" AS avatar,
+        nd."ngaySinh"::text AS "birthDate",
+        nd."gioiTinh" AS gender,
+        nd."trangThai" AS status,
+        nd."ngayTao" AS "createdAt",
+        nd."ngayCapNhat" AS "updatedAt",
+        COALESCE(array_agg(DISTINCT vt."tenVaiTro") FILTER (WHERE vt."tenVaiTro" IS NOT NULL), '{}') AS roles,
+        COALESCE(student_count."count", 0)::int AS "studentCount",
+        COALESCE(parent_link_count."count", 0)::int AS "linkedParentCount",
+        COALESCE(profile_summary."totalPoints", 0)::int AS "totalPoints",
+        COALESCE(profile_summary."streak", 0)::int AS "streak",
+        ROUND(COALESCE(progress_summary."avgProgress", 0))::int AS "avgProgress",
+        activity_summary."lastQuizAt" AS "lastQuizAt",
+        COALESCE(progress_summary."activeLessons", 0)::int AS "activeLessons",
+        COALESCE(progress_summary."lockedLessons", 0)::int AS "lockedLessons",
+        COALESCE(content_summary."publishedPaths", 0)::int AS "publishedPaths",
+        COALESCE(content_summary."publishedLessons", 0)::int AS "publishedLessons",
+        COALESCE(content_summary."publishedQuizzes", 0)::int AS "publishedQuizzes"
+      FROM nguoidung nd
+      LEFT JOIN nguoidung_vaitro ndvt ON ndvt."maNguoiDung" = nd."maNguoiDung"
+      LEFT JOIN vaitro vt ON vt."maVaiTro" = ndvt."maVaiTro"
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS count
+        FROM lienket_phuhuynh_hocvien lk
+        WHERE lk."maPhuHuynh" = nd."maNguoiDung"
+          AND lk."trangThai" = 'DaChapNhan'
+      ) parent_link_count ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS count
+        FROM nguoidung_vaitro ndvt2
+        JOIN vaitro vt2 ON vt2."maVaiTro" = ndvt2."maVaiTro"
+        WHERE ndvt2."maNguoiDung" = nd."maNguoiDung"
+          AND vt2."tenVaiTro" = 'HocVien'
+      ) student_count ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          COALESCE(hshv."tongDiem", 0)::int AS "totalPoints",
+          COALESCE(hshv."chuoiNgayHoc", 0)::int AS streak
+        FROM hosohocvien hshv
+        WHERE hshv."maNguoiDung" = nd."maNguoiDung"
+        LIMIT 1
+      ) profile_summary ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          COUNT(*) FILTER (WHERE tt."trangThai" = 'DangHoc')::int AS "activeLessons",
+          COUNT(*) FILTER (WHERE tt."trangThai" = 'BiKhoa')::int AS "lockedLessons",
+          ROUND(COALESCE(AVG(tt."phanTramHoanThanh"), 0), 0)::float AS "avgProgress"
+        FROM tientrinhhoctap tt
+        WHERE tt."maHocVien" = nd."maNguoiDung"
+      ) progress_summary ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT MAX(llb."thoiGianNopBai") AS "lastQuizAt"
+        FROM lanlambai llb
+        WHERE llb."maHocVien" = nd."maNguoiDung"
+      ) activity_summary ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          COUNT(*) FILTER (WHERE lt."trangThai" = 'CongBo')::int AS "publishedPaths",
+          COUNT(DISTINCT CASE WHEN bh."trangThai" = 'CongBo' THEN bh."maBaiHoc" END)::int AS "publishedLessons",
+          COUNT(DISTINCT CASE WHEN bkt."trangThai" = 'CongBo' THEN bkt."maBaiKiemTra" END)::int AS "publishedQuizzes"
+        FROM nguoidung_vaitro ndvt3
+        JOIN vaitro vt3 ON vt3."maVaiTro" = ndvt3."maVaiTro"
+        LEFT JOIN lotrinhhoc lt ON lt."maNguoiTao" = nd."maNguoiDung"
+        LEFT JOIN baihoc bh ON bh."maNguoiTao" = nd."maNguoiDung"
+        LEFT JOIN baikiemtra bkt ON bkt."maBaiHoc" = bh."maBaiHoc"
+        WHERE ndvt3."maNguoiDung" = nd."maNguoiDung"
+          AND vt3."tenVaiTro" IN ('GiaoVien', 'QuanTriVien')
+      ) content_summary ON TRUE
+      GROUP BY
+        nd."maNguoiDung",
+        nd."hoTen",
+        nd."email",
+        nd."soDienThoai",
+        nd."anhDaiDien",
+        nd."ngaySinh",
+        nd."gioiTinh",
+        nd."trangThai",
+        nd."ngayTao",
+        nd."ngayCapNhat",
+        student_count."count",
+        parent_link_count."count",
+        profile_summary."totalPoints",
+        profile_summary."streak",
+        progress_summary."activeLessons",
+        progress_summary."lockedLessons",
+        progress_summary."avgProgress",
+        activity_summary."lastQuizAt",
+        content_summary."publishedPaths",
+        content_summary."publishedLessons",
+        content_summary."publishedQuizzes"
+      ORDER BY nd."ngayCapNhat" DESC, nd."hoTen" ASC
+    `;
+  }
+
   async getStudentSupportSuggestions() {
     return this.prisma.$queryRaw<SupportSuggestionRow[]>`
       SELECT
@@ -293,6 +420,64 @@ export class UsersService {
     `;
 
     const [updated] = await this.findSupportSuggestionById(this.prisma, suggestionId);
+    return updated;
+  }
+
+  async updateUserStatus(userId: string, dto: UpdateUserStatusDto, currentUser: AuthUser) {
+    if (currentUser.id === userId && dto.status !== 'HoatDong') {
+      throw new BadRequestException('Không thể tự khóa hoặc tự ngừng hoạt động tài khoản đang đăng nhập.');
+    }
+
+    const [existing] = await this.prisma.$queryRaw<{ id: string; status: string }[]>`
+      SELECT nd."maNguoiDung" AS id, nd."trangThai" AS status
+      FROM nguoidung nd
+      WHERE nd."maNguoiDung" = ${userId}::uuid
+      LIMIT 1
+    `;
+
+    if (!existing) {
+      throw new NotFoundException('Không tìm thấy tài khoản cần cập nhật.');
+    }
+
+    await this.prisma.$executeRaw`
+      UPDATE nguoidung
+      SET "trangThai" = ${dto.status}, "ngayCapNhat" = NOW()
+      WHERE "maNguoiDung" = ${userId}::uuid
+    `;
+
+    const [updated] = await this.prisma.$queryRaw<AdminAccountRow[]>`
+      SELECT
+        nd."maNguoiDung" AS id,
+        nd."hoTen" AS "fullName",
+        nd."email" AS email,
+        nd."soDienThoai" AS phone,
+        nd."anhDaiDien" AS avatar,
+        nd."ngaySinh"::text AS "birthDate",
+        nd."gioiTinh" AS gender,
+        nd."trangThai" AS status,
+        nd."ngayTao" AS "createdAt",
+        nd."ngayCapNhat" AS "updatedAt",
+        COALESCE(array_agg(DISTINCT vt."tenVaiTro") FILTER (WHERE vt."tenVaiTro" IS NOT NULL), '{}') AS roles,
+        0::int AS "studentCount",
+        0::int AS "linkedParentCount",
+        COALESCE(hshv."tongDiem", 0)::int AS "totalPoints",
+        COALESCE(hshv."chuoiNgayHoc", 0)::int AS "streak",
+        0::int AS "avgProgress",
+        NULL::timestamp AS "lastQuizAt",
+        0::int AS "activeLessons",
+        0::int AS "lockedLessons",
+        0::int AS "publishedPaths",
+        0::int AS "publishedLessons",
+        0::int AS "publishedQuizzes"
+      FROM nguoidung nd
+      LEFT JOIN nguoidung_vaitro ndvt ON ndvt."maNguoiDung" = nd."maNguoiDung"
+      LEFT JOIN vaitro vt ON vt."maVaiTro" = ndvt."maVaiTro"
+      LEFT JOIN hosohocvien hshv ON hshv."maNguoiDung" = nd."maNguoiDung"
+      WHERE nd."maNguoiDung" = ${userId}::uuid
+      GROUP BY nd."maNguoiDung", hshv."tongDiem", hshv."chuoiNgayHoc"
+      LIMIT 1
+    `;
+
     return updated;
   }
 

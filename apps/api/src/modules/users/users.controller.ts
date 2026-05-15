@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CreateStudentSupportDto } from './dto/create-student-support.dto';
 import { UpdateStudentSupportStatusDto } from './dto/update-student-support-status.dto';
+import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { UsersService } from './users.service';
 
 @Controller('users')
@@ -24,6 +25,24 @@ export class UsersController {
   @Get('students')
   getStudents() {
     return this.usersService.getStudents();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('QuanTriVien')
+  @Get('admin/accounts')
+  getAdminAccounts() {
+    return this.usersService.getAdminAccounts();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('QuanTriVien')
+  @Patch('admin/accounts/:userId/status')
+  updateUserStatus(
+    @Param('userId') userId: string,
+    @Body() dto: UpdateUserStatusDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.usersService.updateUserStatus(userId, dto, user);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

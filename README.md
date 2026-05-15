@@ -14,6 +14,7 @@ Hệ thống được thiết kế theo mô hình actor-based để tránh việ
 - Giáo viên quản lý nội dung học, theo dõi lớp và học viên cần hỗ trợ.
 - Quản trị viên giám sát toàn hệ thống, tài khoản và trạng thái công bố.
 - Game hóa trải nghiệm học với pet Pingu, nhiệm vụ ngày, XP, coins và mini game.
+- Content Hub tích hợp nguồn ngoài cho từ vựng, ngữ pháp, hình ảnh và audio.
 - Có hướng mở rộng cho AI nhận diện hình ảnh, gợi ý từ vựng và luyện phát âm.
 
 ## Tính năng chính
@@ -23,6 +24,7 @@ Hệ thống được thiết kế theo mô hình actor-based để tránh việ
 - Quản lý lộ trình học, giai đoạn, bài học và quiz.
 - Theo dõi tiến trình học và trạng thái mở khóa bài.
 - Sân chơi học tập: mini game, pet, nhiệm vụ ngày.
+- Kho nội dung đa nguồn: Datamuse, LanguageTool, Openverse và các nguồn có API key.
 - Gợi ý ôn tập cho phụ huynh.
 - Theo dõi lớp học và học viên cần hỗ trợ cho giáo viên.
 - Giám sát nội dung và người dùng cho quản trị viên.
@@ -102,8 +104,18 @@ npm run db:generate
 npm run dev
 ```
 
-Web: `http://localhost:3000`  
-API: `http://localhost:4000/api`
+Web: `http://localhost:4000`  
+API: `http://localhost:4100/api`
+
+### API tích hợp nội dung ngoài
+
+Mặc định hệ thống dùng được các nguồn không cần key: Datamuse, LanguageTool và Openverse. Nếu muốn mở rộng thêm định nghĩa/audio chuẩn và ảnh chất lượng cao, thêm các biến sau vào `.env`:
+
+```bash
+MERRIAM_WEBSTER_LEARNERS_KEY=
+PIXABAY_API_KEY=
+PEXELS_API_KEY=
+```
 
 ### 5. Chạy bằng Docker
 

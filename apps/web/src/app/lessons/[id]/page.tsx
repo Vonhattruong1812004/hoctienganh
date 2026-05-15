@@ -236,7 +236,7 @@ export default function LessonDetailPage() {
   if (!session) {
     return (
       <main className="loadingShell">
-        <p>Đang chuyển hướng...</p>
+        <p>Đang mở bài học...</p>
       </main>
     );
   }

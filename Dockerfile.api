@@ -15,6 +15,6 @@ COPY . .
 RUN npm run prisma:generate -w packages/database
 RUN npm run build -w apps/api
 
-EXPOSE 4000
+EXPOSE 4100
 
 CMD ["node", "apps/api/dist/main.js"]

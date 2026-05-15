@@ -1,4 +1,4 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000/api';
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4100/api';
 
 export function resolveApiAssetUrl(path: string | null | undefined) {
   if (!path) return null;

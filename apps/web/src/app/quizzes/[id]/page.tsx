@@ -215,7 +215,7 @@ export default function QuizDetailPage() {
   if (!session) {
     return (
       <main className="loadingShell">
-        <p>Đang chuyển hướng...</p>
+        <p>Đang mở quiz...</p>
       </main>
     );
   }
