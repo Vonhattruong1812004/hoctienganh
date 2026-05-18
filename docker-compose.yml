@@ -49,6 +49,11 @@ services:
       JWT_ACCESS_SECRET: dev-access-secret
       JWT_ACCESS_EXPIRES_IN: 15m
       NODE_ENV: production
+      MERRIAM_WEBSTER_LEARNERS_KEY: ${MERRIAM_WEBSTER_LEARNERS_KEY:-}
+      PIXABAY_API_KEY: ${PIXABAY_API_KEY:-}
+      PEXELS_API_KEY: ${PEXELS_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_VISION_MODEL: ${OPENAI_VISION_MODEL:-gpt-4.1-mini}
     ports:
       - "4100:4100"
     healthcheck:

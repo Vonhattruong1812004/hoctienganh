@@ -16,6 +16,7 @@ import {
   TimerReset,
   TrendingUp,
   LibraryBig,
+  LogOut,
   Target,
   Users,
 } from 'lucide-react';
@@ -24,6 +25,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { USER_ROLES } from '@english-learning/shared';
 import { AppShell } from '../../components/app-shell';
+import { ThemeToggleButton } from '../../components/theme-toggle';
 import { ApiError, apiGet, apiPatch, apiPost } from '../../lib/api';
 import { clearStoredSession, getStoredSession, type WebAuthSession } from '../../lib/session';
 
@@ -80,8 +82,13 @@ type QuizRow = LessonDetail['quizzes'][number] & {
   lessonId: string;
   lessonTitle: string;
   topicName: string;
+  pathName: string;
+  stageName: string;
+  stageOrder: number;
+  lessonOrder: number;
   lessonStatus: string;
   lessonProgress: number;
+  bestScore: number;
 };
 
 type QuizManagementSummary = {
@@ -161,11 +168,19 @@ type ParentQuizResult = {
 };
 
 type ManagementFilter = 'all' | 'published' | 'draft';
+type StudentQuizFilter = 'TatCa' | 'SanSang' | 'CanOn' | 'HoanThanh';
 
 const managementFilterLabels: Record<ManagementFilter, string> = {
   all: 'Tất cả',
   published: 'Đã công bố',
   draft: 'Bản nháp / ẩn',
+};
+
+const studentQuizFilterLabels: Record<StudentQuizFilter, string> = {
+  TatCa: 'Tất cả',
+  SanSang: 'Sẵn sàng',
+  CanOn: 'Cần ôn',
+  HoanThanh: 'Đã đạt',
 };
 
 type QuizManagementState = 'Nhap' | 'CongBo' | 'An';
@@ -206,6 +221,8 @@ export default function QuizzesPage() {
   const [linkedStudents, setLinkedStudents] = useState<LinkedStudent[]>([]);
   const [parentResults, setParentResults] = useState<ParentQuizResult[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [studentQuizQuery, setStudentQuizQuery] = useState('');
+  const [studentQuizFilter, setStudentQuizFilter] = useState<StudentQuizFilter>('TatCa');
   const [managementQuery, setManagementQuery] = useState('');
   const [managementFilter, setManagementFilter] = useState<ManagementFilter>('all');
   const [selectedManagementQuizId, setSelectedManagementQuizId] = useState('');
@@ -285,38 +302,82 @@ export default function QuizzesPage() {
         }
 
         const paths = await apiGet<LearningPathSummary[]>('/learning-paths', currentSession.accessToken);
-        const firstPath = paths[0]
-          ? await apiGet<LearningPathDetail>(`/learning-paths/${paths[0].id}`, currentSession.accessToken)
-          : null;
-        const progressRows = currentSession.user.roles.includes('HocVien')
+        const pathDetails = await Promise.all(
+          paths.map((path) => apiGet<LearningPathDetail>(`/learning-paths/${path.id}`, currentSession.accessToken)),
+        );
+        const progressRows = currentSession.user.roles.includes(USER_ROLES.STUDENT)
           ? await apiGet<ProgressRow[]>(`/progress/students/${currentSession.user.id}`, currentSession.accessToken)
           : [];
-        const lessonSummaries: LessonSummary[] =
-          firstPath?.stages.flatMap((stage) =>
-            stage.lessons.map((lesson) => ({
-              ...lesson,
-              stageOrder: stage.orderIndex,
-            })),
+        const progressByLesson = new Map(progressRows.map((item) => [item.lessonId, item]));
+        const lessonSummaries =
+          pathDetails.flatMap((path) =>
+            path.stages.flatMap((stage) =>
+              stage.lessons.map((lesson) => {
+                const lessonProgress = progressByLesson.get(lesson.id);
+                const isFirstLesson = stage.orderIndex === 1 && lesson.orderIndex === 1;
+                const lessonStatus = lessonProgress?.status ?? (isFirstLesson ? 'ChuaHoc' : 'BiKhoa');
+
+                return {
+                  ...lesson,
+                  pathName: path.name,
+                  stageName: stage.name,
+                  stageOrder: stage.orderIndex,
+                  lessonStatus,
+                  lessonProgress: Number(lessonProgress?.percentComplete ?? 0),
+                  bestScore: Number(lessonProgress?.bestScore ?? 0),
+                };
+              }),
+            ),
           ) ?? [];
         const lessonDetails = await Promise.all(
-          lessonSummaries.map((lesson) => apiGet<LessonDetail>(`/lessons/${lesson.id}`, currentSession.accessToken)),
-        );
-        const progressByLesson = new Map(progressRows.map((item) => [item.lessonId, item]));
-        const quizRows = lessonDetails.flatMap((lesson, index) => {
-          const lessonSummary = lessonSummaries[index];
-          const lessonProgress = progressByLesson.get(lesson.id);
-          const lessonStatus =
-            lessonProgress?.status ??
-            (lessonSummary?.stageOrder === 1 && lessonSummary?.orderIndex === 1 ? 'ChuaHoc' : 'BiKhoa');
+          lessonSummaries
+            .filter((lesson) => lesson.lessonStatus !== 'BiKhoa')
+            .map(async (lesson) => {
+              try {
+                return {
+                  lesson,
+                  detail: await apiGet<LessonDetail>(`/lessons/${lesson.id}`, currentSession.accessToken),
+                };
+              } catch (err) {
+                if (err instanceof ApiError && err.status === 401) {
+                  throw err;
+                }
 
-          return lesson.quizzes.map((quiz) => ({
+                if (err instanceof ApiError && (err.status === 403 || err.status === 404)) {
+                  return {
+                    lesson,
+                    detail: null,
+                  };
+                }
+
+                throw err;
+              }
+            }),
+        );
+        const quizRows = lessonDetails.flatMap(({ lesson, detail }) => {
+          if (!detail) return [];
+
+          return detail.quizzes.map((quiz) => ({
             ...quiz,
-            lessonId: lesson.id,
-            lessonTitle: lesson.title,
-            topicName: lesson.topicName,
-            lessonStatus,
-            lessonProgress: lessonProgress?.percentComplete ?? 0,
+            lessonId: detail.id,
+            lessonTitle: detail.title,
+            topicName: detail.topicName,
+            pathName: lesson.pathName,
+            stageName: lesson.stageName,
+            stageOrder: lesson.stageOrder,
+            lessonOrder: lesson.orderIndex,
+            lessonStatus: lesson.lessonStatus,
+            lessonProgress: lesson.lessonProgress,
+            bestScore: lesson.bestScore,
           }));
+        }).sort((a, b) => {
+          const pathCompare = a.pathName.localeCompare(b.pathName, 'vi-VN');
+          if (pathCompare !== 0) return pathCompare;
+          const stageCompare = a.stageOrder - b.stageOrder;
+          if (stageCompare !== 0) return stageCompare;
+          const lessonCompare = a.lessonOrder - b.lessonOrder;
+          if (lessonCompare !== 0) return lessonCompare;
+          return a.title.localeCompare(b.title, 'vi-VN');
         });
 
         if (!active) return;
@@ -371,6 +432,56 @@ export default function QuizzesPage() {
       bestScore: Math.round(bestScore),
     };
   }, [visibleResults]);
+
+  const studentQuizStats = useMemo(() => {
+    const total = quizzes.length;
+    const completed = quizzes.filter((quiz) => quiz.bestScore >= quiz.passingScore).length;
+    const needReview = quizzes.filter((quiz) => quiz.bestScore > 0 && quiz.bestScore < quiz.passingScore).length;
+    const ready = quizzes.filter((quiz) => quiz.lessonStatus !== 'BiKhoa').length;
+    const averageScore = total
+      ? Math.round(quizzes.reduce((sum, quiz) => sum + Number(quiz.bestScore ?? 0), 0) / total)
+      : 0;
+
+    return {
+      total,
+      ready,
+      completed,
+      needReview,
+      averageScore,
+      passRate: total ? Math.round((completed / total) * 100) : 0,
+    };
+  }, [quizzes]);
+  const visibleStudentQuizzes = useMemo(() => {
+    const normalizedQuery = normalizeText(studentQuizQuery.trim());
+
+    return quizzes
+      .filter((quiz) => {
+        if (studentQuizFilter === 'SanSang') return quiz.lessonStatus !== 'BiKhoa';
+        if (studentQuizFilter === 'CanOn') return quiz.bestScore > 0 && quiz.bestScore < quiz.passingScore;
+        if (studentQuizFilter === 'HoanThanh') return quiz.bestScore >= quiz.passingScore;
+        return true;
+      })
+      .filter((quiz) => {
+        if (!normalizedQuery) return true;
+
+        return normalizeText(
+          [
+            quiz.title,
+            quiz.lessonTitle,
+            quiz.topicName,
+            quiz.pathName,
+            quiz.stageName,
+            quiz.type,
+            statusLabels[quiz.lessonStatus] ?? quiz.lessonStatus,
+          ].join(' '),
+        ).includes(normalizedQuery);
+      });
+  }, [quizzes, studentQuizFilter, studentQuizQuery]);
+  const nextStudentQuiz =
+    visibleStudentQuizzes.find((quiz) => quiz.bestScore > 0 && quiz.bestScore < quiz.passingScore) ??
+    visibleStudentQuizzes.find((quiz) => quiz.bestScore < quiz.passingScore) ??
+    visibleStudentQuizzes[0] ??
+    null;
 
   const managementStats = useMemo(() => {
     const totalQuizzes = managementQuizzes.length;
@@ -584,6 +695,11 @@ export default function QuizzesPage() {
     } finally {
       setQuizActionBusyId('');
     }
+  }
+
+  function handleLogout() {
+    clearStoredSession();
+    router.replace('/login');
   }
 
   if (!session) {
@@ -1310,59 +1426,194 @@ export default function QuizzesPage() {
   }
 
   return (
-    <AppShell session={session} active="quizzes" eyebrow="Kiểm tra" title="Kiểm tra">
-      <section className="pageHeroCompact">
+    <main className="studentUcStandalone studentQuizStandalone">
+      <header className="studentUcTopbar">
+        <div>
+          <p className="eyebrow">Học viên</p>
+          <h1>Làm bài kiểm tra</h1>
+        </div>
+        <div className="topbarActions">
+          <ThemeToggleButton />
+          <button className="secondaryButton" type="button" onClick={handleLogout}>
+            <LogOut size={18} />
+            Đăng xuất
+          </button>
+        </div>
+      </header>
+
+      <section className="pageHeroCompact studentQuizHero">
         <div>
           <p className="eyebrow">Luyện tập và đánh giá</p>
-          <h2>Toàn bộ quiz nằm trong một trang riêng để người học vào làm bài nhanh.</h2>
-          <p>Quiz liên kết với từng bài học, có thời lượng, điểm đạt và đường dẫn quay lại nội dung học.</p>
+          <h2>Vào quiz đúng bài đang mở, xem điểm cần đạt và quay lại ôn bài nếu chưa sẵn sàng.</h2>
+          <p>
+            Trang này chỉ hiển thị quiz thuộc các bài học học viên đã mở khóa, tránh lỗi 403 từ bài học đang khóa
+            và giữ luồng làm bài rõ ràng.
+          </p>
         </div>
         <span className="inlineBadge">
           <FileQuestion size={16} />
-          {quizzes.length} quiz
+          {studentQuizStats.total} quiz sẵn sàng
         </span>
       </section>
 
       {error ? <div className="errorBox dashboardMessage">{error}</div> : null}
       {loading ? <div className="subtleBox dashboardMessage">Đang tải quiz...</div> : null}
 
-      <section className="featureList">
-        {quizzes.map((quiz) => (
-          <article className="featureRow" key={quiz.id}>
-            <div className="featureIcon">
-              {quiz.lessonStatus === 'BiKhoa' ? <LockKeyhole size={20} /> : <CheckCircle2 size={20} />}
+      <section className="studentQuizFocus">
+        <article className="lessonDetailProgressCard">
+          <div
+            className="lessonProgressDial"
+            style={{ '--lesson-progress': `${studentQuizStats.passRate}%` } as CSSProperties}
+          >
+            <span>{studentQuizStats.passRate}%</span>
+            <small>tỷ lệ đạt</small>
+          </div>
+          <div>
+            <strong>{nextStudentQuiz ? nextStudentQuiz.title : 'Chưa có quiz đang mở'}</strong>
+            <span>
+              {nextStudentQuiz
+                ? `${nextStudentQuiz.lessonTitle} • cần đạt ${nextStudentQuiz.passingScore}%`
+                : 'Khi bài học được mở khóa, quiz tương ứng sẽ xuất hiện tại đây.'}
+            </span>
+          </div>
+        </article>
+
+        <div className="studentQuizStatGrid">
+          <article>
+            <FileQuestion size={20} />
+            <span>Tổng quiz</span>
+            <strong>{studentQuizStats.total}</strong>
+          </article>
+          <article>
+            <CheckCircle2 size={20} />
+            <span>Đã đạt</span>
+            <strong>{studentQuizStats.completed}</strong>
+          </article>
+          <article>
+            <ShieldAlert size={20} />
+            <span>Cần ôn</span>
+            <strong>{studentQuizStats.needReview}</strong>
+          </article>
+          <article>
+            <Award size={20} />
+            <span>Điểm TB</span>
+            <strong>{studentQuizStats.averageScore}%</strong>
+          </article>
+        </div>
+      </section>
+
+      <section className="studentLessonToolbar studentQuizToolbar">
+        <div className="sectionTitle">
+          <div>
+            <h2>Danh sách quiz</h2>
+            <span>Lọc theo trạng thái học tập để chọn đúng bài kiểm tra cần làm</span>
+          </div>
+          <span className="inlineBadge">
+            <Target size={14} />
+            {visibleStudentQuizzes.length}/{quizzes.length} quiz
+          </span>
+        </div>
+
+        <div className="studentLessonToolbarGrid">
+          <label className="field">
+            <span>Tìm quiz</span>
+            <div className="inputWithIcon">
+              <Search size={16} />
+              <input
+                value={studentQuizQuery}
+                onChange={(event) => setStudentQuizQuery(event.target.value)}
+                placeholder="Tìm theo quiz, bài học, chủ đề, lộ trình..."
+              />
             </div>
-            <div>
-              <strong>{quiz.title}</strong>
-              <span>{quiz.lessonTitle}</span>
+          </label>
+
+          <div className="lessonFilterGroup" aria-label="Bộ lọc quiz học viên">
+            {(['TatCa', 'SanSang', 'CanOn', 'HoanThanh'] as StudentQuizFilter[]).map((filter) => (
+              <button
+                className={`lessonFilterButton ${studentQuizFilter === filter ? 'active' : ''}`}
+                key={filter}
+                type="button"
+                onClick={() => setStudentQuizFilter(filter)}
+                aria-pressed={studentQuizFilter === filter}
+              >
+                <Filter size={14} />
+                {studentQuizFilterLabels[filter]}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="studentQuizGrid">
+        {visibleStudentQuizzes.map((quiz) => {
+          const passed = quiz.bestScore >= quiz.passingScore;
+          const needsReview = quiz.bestScore > 0 && quiz.bestScore < quiz.passingScore;
+          const progressValue = Math.min(100, Math.max(0, quiz.bestScore || quiz.lessonProgress));
+
+          return (
+            <article className={`studentQuizCard ${passed ? 'passed' : needsReview ? 'review' : ''}`} key={quiz.id}>
+              <div className="studentQuizCardHead">
+                <span className="featureIcon">
+                  {passed ? <Award size={20} /> : needsReview ? <ShieldAlert size={20} /> : <FileQuestion size={20} />}
+                </span>
+                <div>
+                  <p className="eyebrow">{quiz.pathName}</p>
+                  <strong>{quiz.title}</strong>
+                  <span>{quiz.lessonTitle}</span>
+                </div>
+              </div>
+
               <div className="featureMeta">
+                <em>
+                  <BookOpen size={14} />
+                  {quiz.stageName}
+                </em>
                 <em>{quiz.topicName}</em>
-                <em>{quiz.lessonStatus === 'BiKhoa' ? 'Bị khóa' : `${quiz.lessonProgress}% bài học`}</em>
                 <em>
                   <TimerReset size={14} />
                   {quiz.durationMinutes ?? 0} phút
                 </em>
-                <em>Đạt {quiz.passingScore}%</em>
-                <em>{quiz.type}</em>
+                <em>{quizTypeLabels[quiz.type] ?? quiz.type}</em>
               </div>
-            </div>
-            {quiz.lessonStatus === 'BiKhoa' ? (
-              <span className="primaryButton disabledAction" aria-disabled="true">
-                Bị khóa
-                <ArrowRight size={16} />
-              </span>
-            ) : (
-              <Link className="primaryButton" href={`/quizzes/${quiz.id}`}>
-                Làm bài
-                <ArrowRight size={16} />
-              </Link>
-            )}
-          </article>
-        ))}
 
-        {!quizzes.length && !loading ? <div className="subtleBox">Chưa có quiz công bố.</div> : null}
+              <div className="studentQuizScoreLine">
+                <div>
+                  <span>Điểm cao nhất</span>
+                  <strong>{quiz.bestScore}%</strong>
+                </div>
+                <div>
+                  <span>Điểm đạt</span>
+                  <strong>{quiz.passingScore}%</strong>
+                </div>
+              </div>
+
+              <div className="progressRail">
+                <div className="progressFill" style={{ width: `${progressValue}%` }} />
+              </div>
+
+              <div className="studentQuizActions">
+                <Link className="secondaryButton" href={`/lessons/${quiz.lessonId}`}>
+                  Ôn bài
+                  <BookOpen size={14} />
+                </Link>
+                <Link className="primaryButton" href={`/quizzes/${quiz.id}`}>
+                  {passed ? 'Làm lại' : needsReview ? 'Làm lại để đạt' : 'Làm bài'}
+                  <ArrowRight size={16} />
+                </Link>
+              </div>
+            </article>
+          );
+        })}
+
+        {!visibleStudentQuizzes.length && !loading ? (
+          <div className="emptyState">
+            <LockKeyhole size={30} />
+            <h2>Chưa có quiz phù hợp.</h2>
+            <p>Hãy mở khóa bài học tiếp theo hoặc đổi bộ lọc để xem các quiz hiện có.</p>
+          </div>
+        ) : null}
       </section>
-    </AppShell>
+    </main>
   );
 }
 

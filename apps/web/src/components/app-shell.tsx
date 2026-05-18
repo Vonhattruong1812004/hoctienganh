@@ -5,11 +5,9 @@ import {
   BookOpen,
   ChartNoAxesCombined,
   CheckCircle2,
-  Gamepad2,
   GraduationCap,
   LibraryBig,
   LogOut,
-  PlayCircle,
   Settings,
   ShieldCheck,
   Users,
@@ -50,18 +48,15 @@ const roleLabels: Record<UserRole, string> = {
 
 const actorNavItems: Record<UserRole, NavItem[]> = {
   [USER_ROLES.STUDENT]: [
-    { key: 'paths', href: '/learning-paths', label: 'UC1 Xem lộ trình học', icon: BookOpen },
-    { key: 'lessons', href: '/lessons', label: 'UC2 Học bài chi tiết', icon: PlayCircle },
-    { key: 'quizzes', href: '/quizzes', label: 'UC3 Làm bài kiểm tra', icon: CheckCircle2 },
-    { key: 'progress', href: '/progress', label: 'UC4 Xem tiến trình cá nhân', icon: ChartNoAxesCombined },
-    { key: 'playground', href: '/playground', label: 'UC5 Sân chơi học tập', icon: Gamepad2 },
+    { key: 'lessons', href: '/lessons', label: 'UC1 Học từ vựng theo chủ đề', icon: BookOpen },
+    { key: 'progress', href: '/progress', label: 'UC2 Theo dõi tiến trình học tập', icon: ChartNoAxesCombined },
   ],
   [USER_ROLES.PARENT]: [
     { key: 'students', href: '/students', label: 'UC1 Xem học viên liên kết', icon: Users },
     { key: 'progress', href: '/progress', label: 'UC2 Theo dõi tiến trình con', icon: ChartNoAxesCombined },
     { key: 'quizzes', href: '/quizzes', label: 'UC3 Xem kết quả kiểm tra', icon: CheckCircle2 },
-    { key: 'dashboard', href: '/dashboard', label: 'UC4 Cảnh báo và gợi ý ôn tập', icon: ShieldCheck },
-    { key: 'dashboard', href: '/dashboard', label: 'UC5 Thông báo học tập', icon: Activity },
+    { key: 'dashboard', href: '/parent/support', label: 'UC4 Cảnh báo và gợi ý ôn tập', icon: ShieldCheck },
+    { key: 'dashboard', href: '/parent/notifications', label: 'UC5 Thông báo học tập', icon: Activity },
   ],
   [USER_ROLES.TEACHER]: [
     { key: 'paths', href: '/learning-paths', label: 'UC1 Quản lý lộ trình', icon: BookOpen },

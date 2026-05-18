@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Circle,
   CircleDot,
+  LogOut,
   ShieldCheck,
   TimerReset,
 } from 'lucide-react';
@@ -14,6 +15,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { USER_ROLES } from '@english-learning/shared';
 import { SpeechButton } from '../../../components/speech-button';
+import { ThemeToggleButton } from '../../../components/theme-toggle';
 import { ApiError, apiGet, apiPost, resolveApiAssetUrl } from '../../../lib/api';
 import { clearStoredSession } from '../../../lib/session';
 import { getStoredSession, type WebAuthSession } from '../../../lib/session';
@@ -83,6 +85,86 @@ type SubmitResponse = {
   } | null;
 };
 
+const quizTypeLabels: Record<string, string> = {
+  CuoiBai: 'Cuối bài',
+  CuoiNgay: 'Cuối ngày',
+  LuyenTap: 'Luyện tập',
+};
+
+const questionTypeLabels: Record<string, string> = {
+  MotDapAn: 'Một đáp án',
+  NhieuDapAn: 'Nhiều đáp án',
+  DienTu: 'Điền từ',
+  Nghe: 'Nghe',
+};
+
+const difficultyLabels: Record<string, string> = {
+  De: 'Dễ',
+  TrungBinh: 'Trung bình',
+  Kho: 'Khó',
+};
+
+const statusLabels: Record<string, string> = {
+  Dat: 'Đạt',
+  KhongDat: 'Không đạt',
+  DangLam: 'Đang làm',
+  DaNop: 'Đã nộp',
+  CongBo: 'Đã công bố',
+  Nhap: 'Bản nháp',
+  An: 'Đang ẩn',
+};
+
+const vietnameseTextFixes: Record<string, string> = {
+  'Cau nao dung de hoi ten nguoi khac?': 'Câu nào dùng để hỏi tên người khác?',
+  'Dien tu con thieu: My ____ is Khang.': 'Điền từ còn thiếu: My ____ is Khang.',
+  'Nice to meet you nghia la gi?': 'Nice to meet you nghĩa là gì?',
+  'Nghe audio va chon loi chao ban nghe duoc.': 'Nghe audio và chọn lời chào bạn nghe được.',
+  'Tu nao co nghia la quyen sach?': 'Từ nào có nghĩa là quyển sách?',
+  'Chon cau dung khi gioi thieu vat o gan.': 'Chọn câu đúng khi giới thiệu vật ở gần.',
+  'Dien tu: That is a blue ____.': 'Điền từ: That is a blue ____.',
+  'Chair nghia la gi?': 'Chair nghĩa là gì?',
+  'Father nghia la gi?': 'Father nghĩa là gì?',
+  'Dien tu: She is my ____.': 'Điền từ: She is my ____.',
+  'Cau nao dung de gioi thieu me cua toi?': 'Câu nào đúng để giới thiệu mẹ của tôi?',
+  'My dung de dien ta dieu gi?': 'My dùng để diễn tả điều gì?',
+  'Chon loi chao dung trong tieng Anh.': 'Chọn lời chào đúng trong tiếng Anh.',
+  'Book, pen, chair thuoc chu de nao?': 'Book, pen, chair thuộc chủ đề nào?',
+  'I study English every day dung thi nao?': 'I study English every day dùng thì nào?',
+  'Dien tu: I like ____.': 'Điền từ: I like ____.',
+  'Nghe audio va chon chu de cua doan nghe.': 'Nghe audio và chọn chủ đề của đoạn nghe.',
+  'Rat vui duoc gap ban': 'Rất vui được gặp bạn',
+  'Tam biet ban': 'Tạm biệt bạn',
+  'cai ghe': 'cái ghế',
+  'cai ban': 'cái bàn',
+  'bo/cha': 'bố/cha',
+  'anh trai': 'anh/em trai',
+  'cua toi': 'của tôi',
+  'cua ban': 'của bạn',
+  'Do vat trong lop hoc': 'Đồ vật trong lớp học',
+  'Thanh vien gia dinh': 'Thành viên gia đình',
+  'Hien tai don': 'Hiện tại đơn',
+  'Qua khu don': 'Quá khứ đơn',
+  'Dap an goi y': 'Đáp án gợi ý',
+};
+
+function displayText(value: string | null | undefined) {
+  if (!value) return '';
+  return vietnameseTextFixes[value] ?? value;
+}
+
+function formatApiError(err: unknown, fallback: string) {
+  if (err instanceof ApiError) {
+    try {
+      const body = JSON.parse(err.body) as { message?: string; error?: string };
+      return body.message ?? body.error ?? fallback;
+    } catch {
+      return err.body || fallback;
+    }
+  }
+
+  return err instanceof Error ? err.message : fallback;
+}
+
 export default function QuizDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -129,7 +211,7 @@ export default function QuizDetailPage() {
           router.replace('/login');
           return;
         }
-        setError(err instanceof Error ? err.message : 'Không tải được bài kiểm tra.');
+        setError(formatApiError(err, 'Không tải được bài kiểm tra.'));
       } finally {
         if (active) {
           setLoading(false);
@@ -167,6 +249,7 @@ export default function QuizDetailPage() {
   }, [answers, quiz]);
 
   const answeredCount = quiz?.questions.filter((question) => (answers[question.id] ?? '').trim().length > 0).length ?? 0;
+  const canSubmit = !isStaff && !!quiz && completion === 100 && !submitting && !result;
   const questionStatuses = quiz?.questions.map((question) => ({
     id: question.id,
     answered: (answers[question.id] ?? '').trim().length > 0,
@@ -206,10 +289,15 @@ export default function QuizDetailPage() {
         router.replace('/login');
         return;
       }
-      setError(err instanceof Error ? err.message : 'Nộp bài thất bại.');
+      setError(formatApiError(err, 'Nộp bài thất bại.'));
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function handleLogout() {
+    clearStoredSession();
+    router.replace('/login');
   }
 
   if (!session) {
@@ -221,16 +309,30 @@ export default function QuizDetailPage() {
   }
 
   return (
-    <main className="detailPage">
-      <header className="detailHero">
+    <main className="studentUcStandalone quizTakingStandalone">
+      <header className="studentUcTopbar">
+        <div>
+          <p className="eyebrow">Học viên</p>
+          <h1>Làm bài kiểm tra</h1>
+        </div>
+        <div className="topbarActions">
+          <ThemeToggleButton />
+          <button className="secondaryButton" type="button" onClick={handleLogout}>
+            <LogOut size={18} />
+            Đăng xuất
+          </button>
+        </div>
+      </header>
+
+      <header className="detailHero quizTakingHero">
         <div>
           <Link className="backLink" href={lessonLink}>
             <ArrowLeft size={16} />
             Về bài học
           </Link>
-          <p className="eyebrow">Làm quiz</p>
+          <p className="eyebrow">{quiz ? quizTypeLabels[quiz.type] ?? 'Làm quiz' : 'Làm quiz'}</p>
           <h1>{quiz?.title ?? 'Đang tải bài kiểm tra...'}</h1>
-          <p>{quiz?.description}</p>
+          <p>{displayText(quiz?.description)}</p>
         </div>
 
         <div className="detailStats">
@@ -274,7 +376,7 @@ export default function QuizDetailPage() {
           <div className="resultActions">
             <div className="resultScore">
               <strong>{result.attempt.percentage}%</strong>
-              <span>{result.attempt.status}</span>
+              <span>{statusLabels[result.attempt.status] ?? result.attempt.status}</span>
             </div>
             {result.nextLesson ? (
               <Link className="primaryButton" href={`/lessons/${result.nextLesson.id}`}>
@@ -287,7 +389,7 @@ export default function QuizDetailPage() {
       ) : null}
 
       <section className="detailSection">
-        <div className="sectionTitle">
+        <div className="sectionTitle quizTakingSectionTitle">
           <div>
             <h2>{isStaff ? 'Xem cấu trúc quiz' : 'Câu hỏi'}</h2>
             <span>
@@ -308,7 +410,7 @@ export default function QuizDetailPage() {
               </Link>
             </div>
           ) : (
-            <button className="primaryButton" type="button" onClick={handleSubmit} disabled={submitting}>
+            <button className="primaryButton" type="button" onClick={handleSubmit} disabled={!canSubmit}>
               {submitting ? 'Đang nộp bài...' : 'Nộp bài'}
               <CheckCircle2 size={16} />
             </button>
@@ -330,6 +432,9 @@ export default function QuizDetailPage() {
           </span>
           <span className="inlineBadge">Lần làm tối đa {quiz?.maxAttempts ?? 'không giới hạn'}</span>
           {isStaff ? <span className="inlineBadge">{quiz?.status ?? 'Chưa rõ trạng thái'}</span> : null}
+          {!isStaff && completion < 100 ? (
+            <span className="inlineBadge warningBadge">Cần trả lời đủ {quiz?.questions.length ?? 0} câu</span>
+          ) : null}
         </div>
 
         <div className="quizWorkspace">
@@ -343,9 +448,10 @@ export default function QuizDetailPage() {
                   <div className="questionHead">
                     <div>
                       <span className="questionIndex">Câu {index + 1}</span>
-                      <strong>{question.content}</strong>
+                      <strong>{displayText(question.content)}</strong>
                       <small>
-                        {question.type} • {question.difficulty ?? 'Dễ'} • {question.score} điểm
+                        {questionTypeLabels[question.type] ?? question.type} •{' '}
+                        {difficultyLabels[question.difficulty ?? ''] ?? question.difficulty ?? 'Dễ'} • {question.score} điểm
                       </small>
                     </div>
                     <CircleDot size={16} />
@@ -353,7 +459,7 @@ export default function QuizDetailPage() {
 
                   {question.audio ? (
                     <div className="questionAudio">
-                      <SpeechButton text={question.content} audioUrl={question.audio} label="Nghe câu hỏi" />
+                      <SpeechButton text={displayText(question.content)} audioUrl={question.audio} label="Nghe câu hỏi" />
                     </div>
                   ) : null}
 
@@ -368,7 +474,7 @@ export default function QuizDetailPage() {
                       <div className="optionStack">
                         <div className="optionButton selected" aria-readonly="true">
                           <CheckCircle2 size={16} />
-                          <span>{correctAnswer?.content ?? 'Chưa có đáp án đúng'}</span>
+                          <span>{displayText(correctAnswer?.content) || 'Chưa có đáp án đúng'}</span>
                         </div>
                         <small>
                           Đáp án gợi ý{selectedAnswer ? ` • Đã chọn: ${selectedAnswer}` : ''}
@@ -385,7 +491,7 @@ export default function QuizDetailPage() {
                               aria-readonly="true"
                             >
                               {correct ? <CheckCircle2 size={16} /> : <Circle size={16} />}
-                              <span>{answer.content}</span>
+                              <span>{displayText(answer.content)}</span>
                               {correct ? <em style={{ marginLeft: 'auto', fontStyle: 'normal' }}>Đáp án đúng</em> : null}
                             </div>
                           );
@@ -423,7 +529,7 @@ export default function QuizDetailPage() {
                             }
                           >
                             {selected ? <CircleDot size={16} /> : <Circle size={16} />}
-                            <span>{answer.content}</span>
+                            <span>{displayText(answer.content)}</span>
                           </button>
                         );
                       })}

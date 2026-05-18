@@ -12,3 +12,4 @@ coverage
 .DS_Store
 docker/postgres/data
 docker/redis/data
+/ETS/

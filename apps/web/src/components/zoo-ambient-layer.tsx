@@ -109,6 +109,17 @@ const positions = [
   { x: 3, y: 74, delay: -6.2, path: 'left' as const },
 ];
 
+const animalSpeechLines: Record<string, string> = {
+  cat: 'Cat. I am a cute cat.',
+  fish: 'Fish. I can swim in the water.',
+  fox: 'Fox. I am a clever fox.',
+  panda: 'Panda. I like bamboo.',
+  penguin: 'Penguin. I am Pingu the penguin.',
+  pig: 'Pig. I am a happy pig.',
+  rabbit: 'Rabbit. I can hop very fast.',
+  turtle: 'Turtle. Slow and steady wins the race.',
+};
+
 export function ZooAmbientLayer() {
   const [assets, setAssets] = useState<ZooAsset[]>(fallbackZooAssets);
   const [fleeingKey, setFleeingKey] = useState<string | null>(null);
@@ -142,7 +153,23 @@ export function ZooAmbientLayer() {
     [assets],
   );
 
-  function triggerFlee(key: string) {
+  function speakAnimal(animal: ZooLayerItem) {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+
+    const text = animalSpeechLines[animal.key] ?? `${animal.englishWord}. This is a ${animal.englishWord}.`;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.86;
+    utterance.pitch = 1.12;
+    utterance.volume = 1;
+
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function triggerFlee(animal: ZooLayerItem) {
+    speakAnimal(animal);
+    const key = animal.key;
     setFleeingKey(key);
     setActiveKey(key);
     window.setTimeout(() => setFleeingKey((current) => (current === key ? null : current)), 950);
@@ -197,10 +224,11 @@ export function ZooAmbientLayer() {
             data-meaning={animal.vietnameseName}
             data-word={animal.englishWord}
             key={`${animal.key}-${index}`}
-            onClick={() => triggerFlee(animal.key)}
+            onClick={() => triggerFlee(animal)}
             onPointerEnter={() => setActiveKey(animal.key)}
             onPointerLeave={() => setActiveKey((current) => (current === animal.key ? null : current))}
             style={style}
+            title={`Click để nghe: ${animalSpeechLines[animal.key] ?? animal.englishWord}`}
             tabIndex={-1}
             type="button"
           >
@@ -209,7 +237,11 @@ export function ZooAmbientLayer() {
             <span className="zooDust zooDustOne" />
             <span className="zooDust zooDustTwo" />
             <ZooCreature kind={animal.key} />
-            <span className="zooSpeech" data-meaning={animal.vietnameseName} data-word={animal.englishWord} />
+            <span
+              className="zooSpeech"
+              data-meaning={animal.vietnameseName}
+              data-word={animal.englishWord}
+            />
           </button>
         );
       })}

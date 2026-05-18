@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Compass,
+  FileText,
   Flame,
   Gamepad2,
   Heart,
@@ -272,34 +273,40 @@ const roleCommandItems: Record<
 > = {
   [USER_ROLES.STUDENT]: [
     {
-      href: '/learning-paths',
-      icon: BookOpen,
-      label: 'Học theo lộ trình',
-      text: 'Xem path đang công bố, học theo từng giai đoạn và mở khóa bài kế tiếp.',
-    },
-    {
       href: '/lessons',
-      icon: LibraryBig,
-      label: 'Vào bài học',
-      text: 'Đọc nội dung, nghe phát âm, học từ vựng, ngữ pháp và tài nguyên.',
+      icon: BookOpen,
+      label: 'Học từ vựng theo chủ đề',
+      text: 'Học từ bằng ảnh, audio, ngữ cảnh, luyện nhanh, game và test trong một luồng.',
     },
     {
-      href: '/quizzes',
-      icon: CheckCircle2,
-      label: 'Làm kiểm tra',
-      text: 'Làm quiz cuối bài, nhận điểm và cập nhật tiến trình cá nhân.',
+      href: '/grammar',
+      icon: ClipboardCheck,
+      label: 'Học ngữ pháp TOEIC',
+      text: 'Chọn topic ngữ pháp TOEIC, học quy tắc, ví dụ công sở và chơi game luyện Part 5/6.',
+    },
+    {
+      href: '/toeic-guide',
+      icon: Compass,
+      label: 'Giới thiệu bài thi TOEIC',
+      text: 'Xem cấu trúc Listening & Reading, Speaking & Writing, cách làm từng Part và mẹo đạt điểm cao.',
+    },
+    {
+      href: '/toeic-practice',
+      icon: PlayCircle,
+      label: 'Ôn luyện bài thi mẫu TOEIC',
+      text: 'Chọn đề mô phỏng, luyện từng Part hoặc làm Full test theo thời gian TOEIC thật.',
+    },
+    {
+      href: '/ets-practice',
+      icon: FileText,
+      label: 'Thi thử TOEIC',
+      text: 'Vào phòng thi thử TOEIC với PDF LC/RC, audio, answer sheet 200 câu và đồng hồ 120 phút.',
     },
     {
       href: '/progress',
       icon: ChartNoAxesCombined,
-      label: 'Xem tiến trình',
-      text: 'Theo dõi bài đang học, bài hoàn thành, điểm cao nhất và phần trăm học.',
-    },
-    {
-      href: '/playground',
-      icon: Gamepad2,
-      label: 'Sân chơi học tập',
-      text: 'Chơi mini game, chăm pet Pingu, dùng AI Vision và khai thác Content Hub đa nguồn.',
+      label: 'Theo dõi tiến trình học tập',
+      text: 'Thống kê chủ đề, từ đã nhớ/chưa nhớ, điểm game/test, XP, pet và gợi ý học tiếp.',
     },
   ],
   [USER_ROLES.PARENT]: [
@@ -316,13 +323,13 @@ const roleCommandItems: Record<
       text: 'Quan sát bài đã hoàn thành, bài đang học và điểm cao nhất của học viên.',
     },
     {
-      href: '/dashboard',
+      href: '/parent/support',
       icon: ShieldCheck,
       label: 'Gợi ý hỗ trợ',
       text: 'Nhận ngữ cảnh bài cần ôn để phụ huynh hỗ trợ học viên tại nhà.',
     },
     {
-      href: '/dashboard',
+      href: '/parent/notifications',
       icon: Bell,
       label: 'Thông báo học tập',
       text: 'Theo dõi thông báo tiến trình, bài kiểm tra và cảnh báo của học viên.',
@@ -1128,7 +1135,6 @@ export default function DashboardPage() {
         reviewSuggestions={reviewSuggestions}
         parentNotifications={parentNotifications}
         parentReviewSummary={parentReviewSummary}
-        summary={summary}
         loading={loading}
         error={error}
         dataMode={dataMode}
@@ -1623,7 +1629,11 @@ export default function DashboardPage() {
 
 function ContentHubSpotlight({ compact = false }: { compact?: boolean }) {
   return (
-    <section className={`contentHubSpotlight ${compact ? 'compact' : ''}`} aria-label="AI Content Hub đa nguồn">
+    <section
+      id="content-hub-dashboard"
+      className={`contentHubSpotlight ${compact ? 'compact' : ''}`}
+      aria-label="AI Content Hub đa nguồn"
+    >
       <div className="contentHubPixelStage" aria-hidden="true">
         <span className="contentHubPixelSun" />
         <span className="contentHubPixelCloud contentHubPixelCloudOne" />
@@ -1645,8 +1655,8 @@ function ContentHubSpotlight({ compact = false }: { compact?: boolean }) {
         </p>
 
         <div className="contentHubSpotlightActions">
-          <Link className="primaryButton" href="/playground#playground-content-hub">
-            Mở Content Hub
+          <Link className="primaryButton" href="#content-hub-dashboard">
+            Xem Content Hub
             <ArrowRight size={16} />
           </Link>
           <Link className="secondaryButton" href="/playground">
@@ -1732,46 +1742,40 @@ function StudentMenuDashboard({
   const pet = gameDashboard?.pet ?? null;
   const studentUseCaseItems = [
     {
-      href: '/learning-paths',
-      icon: BookOpen,
-      label: 'Xem lộ trình học',
-      text: 'Theo dõi lộ trình, giai đoạn, bài đang mở và điều kiện mở khóa.',
-    },
-    {
       href: '/lessons',
-      icon: LibraryBig,
-      label: 'Xem danh sách bài học',
-      text: 'Duyệt toàn bộ bài học theo lộ trình, chủ đề, trạng thái và mức độ.',
+      icon: BookOpen,
+      label: 'Học từ vựng theo chủ đề',
+      text: 'Chọn chủ đề, học từ bằng ảnh, audio, phiên âm, ví dụ ngữ cảnh, luyện nhanh, chơi game và test trong cùng một luồng.',
     },
     {
-      href: firstOpenLesson ? `/lessons/${firstOpenLesson.id}` : '/lessons',
+      href: '/grammar',
+      icon: ClipboardCheck,
+      label: 'Học ngữ pháp TOEIC',
+      text: 'Học theo topic như thì, bị động, đại từ quan hệ, giới từ, mệnh đề; cuối topic có game luyện Part 5/6.',
+    },
+    {
+      href: '/toeic-guide',
+      icon: Compass,
+      label: 'Giới thiệu bài thi TOEIC',
+      text: 'Nắm cấu trúc 2 bài thi, từng Part/Task, cách phân bổ thời gian, mẹo làm bài và lỗi cần tránh.',
+    },
+    {
+      href: '/toeic-practice',
       icon: PlayCircle,
-      label: 'Học bài học chi tiết',
-      text: 'Vào màn học chính với nhiệm vụ, từ vựng, ngữ pháp và tài nguyên.',
+      label: 'Ôn luyện bài thi mẫu TOEIC',
+      text: 'Chọn đề mô phỏng TOEIC, làm từng Part hoặc Full test với đồng hồ, đáp án và giải thích.',
     },
     {
-      href: firstOpenLesson ? `/lessons/${firstOpenLesson.id}#audio` : '/lessons',
-      icon: Activity,
-      label: 'Nghe audio và phát âm',
-      text: 'Mở phần luyện nghe, câu mẫu, phát âm và ví dụ minh họa trong bài.',
-    },
-    {
-      href: '/quizzes',
-      icon: CheckCircle2,
-      label: 'Làm bài kiểm tra',
-      text: 'Làm quiz, xem điểm, đạt ngưỡng qua bài và nhận thưởng học tập.',
+      href: '/ets-practice',
+      icon: FileText,
+      label: 'Thi thử TOEIC',
+      text: 'Làm full test ETS như phòng thi thật: audio, PDF đề, answer sheet 1-200, timer và chấm bằng key.',
     },
     {
       href: '/progress',
       icon: ChartNoAxesCombined,
-      label: 'Xem tiến trình cá nhân',
-      text: 'Kiểm tra phần trăm hoàn thành, điểm cao nhất và bài cần tiếp tục.',
-    },
-    {
-      href: '/playground',
-      icon: Gamepad2,
-      label: 'Sân chơi học tập',
-      text: 'Chơi mini game, chăm pet Pingu, làm nhiệm vụ ngày và AI hình ảnh.',
+      label: 'Theo dõi tiến trình học tập',
+      text: 'Thống kê chủ đề đã học, từ đã nhớ/chưa nhớ, điểm game/test, XP, pet, nhiệm vụ ngày và gợi ý học tiếp.',
     },
   ];
 
@@ -1788,10 +1792,10 @@ function StudentMenuDashboard({
         <div className="adminMenuHero studentMenuHero">
           <div className="adminMenuHeroCopy">
             <p className="eyebrow">Xin chào, {session.user.fullName}</p>
-            <h2>Chọn cổng học tập của bạn</h2>
+            <h2>Học từ vựng, ngữ pháp TOEIC, thi thử và theo dõi tiến trình.</h2>
             <p>
-              Dashboard học viên chỉ giữ các nút chức năng chính. Mỗi chức năng mở sang một trang riêng để học, làm
-              quiz, xem tiến trình hoặc vào sân chơi.
+              Dashboard học viên chỉ giữ các luồng chính: học từ vựng theo chủ đề, học ngữ pháp TOEIC, nắm cấu trúc
+              bài thi và theo dõi tiến trình. Audio, ví dụ, game, test, pet và gợi ý học tiếp đều nằm đúng luồng.
             </p>
             <div className="adminMenuChips" aria-hidden="true">
               <span>
@@ -1828,8 +1832,8 @@ function StudentMenuDashboard({
 
         <div className="studentMenuStats" aria-label="Tóm tắt học tập nhanh">
           <div className="studentMenuStat">
-            <span>Lộ trình</span>
-            <strong>{learningPath?.name ?? 'Chưa mở'}</strong>
+            <span>Chủ đề đang học</span>
+            <strong>{firstOpenLesson?.stageName ?? learningPath?.name ?? 'Chưa mở'}</strong>
           </div>
           <div className="studentMenuStat">
             <span>Hoàn thành</span>
@@ -1849,8 +1853,8 @@ function StudentMenuDashboard({
 
         <div className="sectionTitle adminMenuHeading">
           <div>
-            <h2>Chọn chức năng để mở trang riêng</h2>
-            <span>Không còn trộn giao diện chi tiết vào dashboard học viên.</span>
+            <h2>Nghiệp vụ chính của học viên</h2>
+            <span>Từ vựng, ngữ pháp TOEIC và tiến trình được tách rõ, không trộn giao diện chi tiết vào dashboard.</span>
           </div>
         </div>
 
@@ -1872,6 +1876,22 @@ function StudentMenuDashboard({
               </Link>
             );
           })}
+        </div>
+
+        <div className="studentLearningFlow" aria-label="Luồng học từ vựng">
+          {[
+            'Chọn chủ đề',
+            'Học từ bằng ảnh + audio',
+            'Hiểu qua ví dụ ngữ cảnh',
+            'Luyện nhanh',
+            'Game/test chủ đề',
+            'Lưu tiến trình',
+          ].map((step, index) => (
+            <div className="studentLearningStep" key={step}>
+              <span>{String(index + 1).padStart(2, '0')}</span>
+              <strong>{step}</strong>
+            </div>
+          ))}
         </div>
       </section>
     </AppShell>
@@ -2408,7 +2428,6 @@ function ParentDashboard({
   reviewSuggestions,
   parentNotifications,
   parentReviewSummary,
-  summary,
   loading,
   error,
   dataMode,
@@ -2426,7 +2445,6 @@ function ParentDashboard({
     unreadNotifications: number;
     averageStudentProgress: number;
   };
-  summary: Summary | null;
   loading: boolean;
   error: string;
   dataMode: 'live' | 'demo';
@@ -2437,26 +2455,26 @@ function ParentDashboard({
     text: string;
   }>;
 }) {
-  const heroCards = [
+  const parentStats = [
     {
-      label: 'Học viên đã liên kết',
+      label: 'Học viên',
       value: linkedStudents.length,
-      note: 'Đang theo dõi cùng gia đình',
+      note: 'Đã liên kết',
     },
     {
-      label: 'Cần ưu tiên',
+      label: 'Cần hỗ trợ',
       value: parentReviewSummary.urgentCount,
-      note: 'Bài cần hỗ trợ hôm nay',
+      note: 'Ưu tiên hôm nay',
     },
     {
       label: 'Chưa đọc',
       value: parentReviewSummary.unreadNotifications,
-      note: 'Thông báo còn mới',
+      note: 'Thông báo mới',
     },
     {
       label: 'Tiến độ TB',
       value: `${parentReviewSummary.averageStudentProgress}%`,
-      note: 'Mức tiến triển toàn nhóm',
+      note: 'Toàn bộ học viên',
     },
   ];
 
@@ -2465,201 +2483,90 @@ function ParentDashboard({
       session={session}
       active="dashboard"
       roleContext={USER_ROLES.PARENT}
-      eyebrow={learningPath?.name ?? 'Cổng phụ huynh'}
-      title="Theo dõi học viên"
+      showSidebar={false}
+      eyebrow="Parent hub"
+      title="Trung tâm phụ huynh"
     >
-      <section className="parentHero">
-        <div className="parentHeroCopy">
-          <p className="eyebrow">Xin chào, {session.user.fullName}</p>
-          <h2>Nhìn nhanh tiến trình, điểm quiz và hỗ trợ học viên ngay trong một màn hình.</h2>
-          <p>
-            Dashboard phụ huynh tập trung vào theo dõi, phát hiện bài chưa đạt và nhắc đúng lúc để việc học ở nhà
-            không bị đứt nhịp.
-          </p>
-          <div className="parentHeroMeta">
-            <span>
-              <Users size={14} />
-              {linkedStudents.length} học viên
-            </span>
-            <span>
-              <Sparkles size={14} />
-              {reviewSuggestions.length} gợi ý ôn tập
-            </span>
-            <span>
-              <Bell size={14} />
-              {parentReviewSummary.unreadNotifications} thông báo mới
-            </span>
+      <section className="panel adminMenuPanel parentMenuPanel" aria-label="Chọn chức năng phụ huynh">
+        <div className="adminMenuHero parentMenuHero">
+          <div className="adminMenuHeroCopy">
+            <p className="eyebrow">Xin chào, {session.user.fullName}</p>
+            <h2>Đồng hành học tập từ từng trang riêng</h2>
+            <p>
+              Dashboard phụ huynh chỉ giữ các cổng chức năng chính. Mỗi chức năng mở sang một màn hình nghiệp vụ
+              riêng để xem học viên, tiến trình, kết quả kiểm tra, gợi ý hỗ trợ hoặc thông báo học tập.
+            </p>
+            <div className="adminMenuChips" aria-hidden="true">
+              <span>
+                <Users size={14} />
+                {linkedStudents.length} học viên
+              </span>
+              <span>
+                <Sparkles size={14} />
+                {reviewSuggestions.length} gợi ý
+              </span>
+              <span>
+                <BookOpen size={14} />
+                {learningPath?.level ?? 'A1'} Path
+              </span>
+            </div>
+          </div>
+
+          <div className="parentMenuScene" aria-hidden="true">
+            <span className="parentSceneSun" />
+            <span className="parentSceneCloud parentSceneCloudOne" />
+            <span className="parentSceneCloud parentSceneCloudTwo" />
+            <span className="parentSceneHouse" />
+            <span className="parentSceneTree parentSceneTreeOne" />
+            <span className="parentSceneTree parentSceneTreeTwo" />
+            <span className="parentScenePath" />
+            <span className="parentSceneMascot parentSceneMascotLarge" />
+            <span className="parentSceneMascot parentSceneMascotSmall" />
+            <span className="parentSceneHeart parentSceneHeartOne" />
+            <span className="parentSceneHeart parentSceneHeartTwo" />
+            <span className="parentSceneLeaf parentSceneLeafOne" />
+            <span className="parentSceneLeaf parentSceneLeafTwo" />
           </div>
         </div>
 
-        <div className="parentHeroStats">
-          {heroCards.map((item, index) => (
-            <article className={`parentHeroStat ${index === 1 ? 'accent' : ''}`} key={item.label}>
+        <div className="studentMenuStats parentMenuStats" aria-label="Tóm tắt phụ huynh">
+          {parentStats.map((item) => (
+            <div className="studentMenuStat parentMenuStat" key={item.label}>
               <span>{item.label}</span>
               <strong>{item.value}</strong>
               <em>{item.note}</em>
-            </article>
+            </div>
           ))}
         </div>
-      </section>
 
-      {error ? <div className="errorBox dashboardMessage">{error}</div> : null}
-      {dataMode === 'demo' ? (
-        <div className="subtleBox dashboardMessage">
-          Đang hiển thị dữ liệu mẫu vì backend chưa phản hồi.
-        </div>
-      ) : null}
-      {loading ? <div className="subtleBox dashboardMessage">Đang đồng bộ dữ liệu phụ huynh...</div> : null}
+        {error ? <div className="errorBox dashboardMessage">{error}</div> : null}
+        {dataMode === 'demo' ? (
+          <div className="subtleBox dashboardMessage">Đang hiển thị dữ liệu mẫu vì backend chưa phản hồi.</div>
+        ) : null}
+        {loading ? <div className="subtleBox dashboardMessage">Đang đồng bộ dữ liệu phụ huynh...</div> : null}
 
-      <section className="metricGrid" aria-label="Chỉ số phụ huynh">
-        <Metric icon={Users} label="Học viên" value={linkedStudents.length} note="Tài khoản đang liên kết" />
-        <Metric icon={ShieldCheck} label="Cần hỗ trợ" value={parentReviewSummary.urgentCount} note="Bài cần ôn" />
-        <Metric icon={Bell} label="Chưa đọc" value={parentReviewSummary.unreadNotifications} note="Thông báo mới" />
-        <Metric icon={TrendingUp} label="TB tiến độ" value={`${parentReviewSummary.averageStudentProgress}%`} note="Nhịp học trung bình" />
-      </section>
-
-      <section className="parentReviewPanel panel" aria-label="Cảnh báo và gợi ý ôn tập">
-        <div className="sectionTitle">
+        <div className="sectionTitle adminMenuHeading">
           <div>
-            <p className="eyebrow">UC4 • Cảnh báo và gợi ý ôn tập</p>
-            <h2>Việc phụ huynh nên hỗ trợ hôm nay</h2>
-            <span>Hệ thống tổng hợp từ tiến trình, điểm quiz và bảng gợi ý để biết cần hỗ trợ học viên ở bài nào.</span>
-          </div>
-          <span className="inlineBadge">
-            <Sparkles size={14} />
-            {reviewSuggestions.length} gợi ý
-          </span>
-        </div>
-
-        <div className="parentReviewList">
-          {reviewSuggestions.map((suggestion) => (
-            <article className={`parentReviewCard priority-${suggestion.priority}`} key={suggestion.id}>
-              <div className="parentReviewCardHead">
-                <div>
-                  <p className="eyebrow">{suggestion.studentName}</p>
-                  <strong>{suggestion.lessonTitle ?? suggestion.topicName ?? 'Nội dung cần ôn tập'}</strong>
-                  <span>{suggestion.reason}</span>
-                </div>
-                <span className={`parentReviewStatus ${suggestion.status}`}>
-                  {formatReviewStatus(suggestion.status)}
-                </span>
-              </div>
-
-              <div className="parentReviewMeta">
-                <span>
-                  <BookOpen size={14} />
-                  {suggestion.pathName ?? 'Lộ trình hiện tại'}
-                </span>
-                <span>
-                  <ClipboardCheck size={14} />
-                  {suggestion.stageName ?? suggestion.topicName ?? 'Chặng học'}
-                </span>
-                <span>
-                  <TrendingUp size={14} />
-                  {Math.round(Number(suggestion.lessonProgress ?? 0))}% bài học
-                </span>
-                <span>
-                  <Award size={14} />
-                  {Math.round(Number(suggestion.bestScore ?? 0))}% cao nhất
-                </span>
-              </div>
-
-              <div className="parentReviewActions">
-                <div className="progressRail">
-                  <div
-                    className="progressFill"
-                    style={{
-                      width: `${Math.min(100, Math.max(0, Number(suggestion.lessonProgress ?? 0)))}%`,
-                    }}
-                  />
-                </div>
-                <Link className="secondaryButton" href={suggestion.lessonId ? `/lessons/${suggestion.lessonId}` : '/progress'}>
-                  Xem bài cần ôn
-                  <ArrowRight size={14} />
-                </Link>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="studentDashboardGrid">
-        <div className="panel">
-          <div className="sectionTitle">
-            <div>
-              <h2>Học viên liên kết</h2>
-              <span>Danh sách học viên đang theo dõi cùng gia đình</span>
-            </div>
-            <span className="inlineBadge">
-              <Users size={14} />
-              {linkedStudents.length} người
-            </span>
-          </div>
-
-          <div className="studentHealthList">
-            {linkedStudents.slice(0, 4).map((student) => (
-              <div className={`studentHealthItem ${isStudentNeedingSupport(student) ? 'CanXuLy' : 'Tot'}`} key={student.id}>
-                <CheckCircle2 size={16} />
-                <div>
-                  <strong>{student.fullName}</strong>
-                  <small>
-                    {student.currentLevel ?? 'Chưa rõ cấp'} • {Math.round(Number(student.averageProgress ?? 0))}% • {student.learningGoal ?? 'Chưa cập nhật mục tiêu'}
-                  </small>
-                </div>
-              </div>
-            ))}
+            <h2>Chọn chức năng để mở trang riêng</h2>
+            <span>Dashboard không còn trộn học viên, cảnh báo và thông báo vào chung một màn hình.</span>
           </div>
         </div>
 
-        <div className="panel">
-          <div className="sectionTitle">
-            <div>
-              <h2>Thông báo học tập</h2>
-              <span>Lịch sử tin và cảnh báo của học viên liên kết</span>
-            </div>
-            <span className="inlineBadge">
-              <Bell size={14} />
-              {parentNotifications.filter((item) => !item.isRead).length} chưa đọc
-            </span>
-          </div>
-
-          <div className="parentNotificationList">
-            {parentNotifications.slice(0, 4).map((notification) => (
-              <article className={`parentNotificationCard ${notification.isRead ? 'read' : 'unread'}`} key={notification.id}>
-                <div className="parentNotificationHead">
-                  <div>
-                    <p className="eyebrow">
-                      {notification.recipientKind === 'PhuHuynh' ? 'Gửi cho phụ huynh' : notification.recipientName}
-                    </p>
-                    <strong>{notification.title}</strong>
-                    <span>{notification.content}</span>
-                  </div>
-                  <span className={`parentNotificationType ${notification.type}`}>{notification.type}</span>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="panel commandCenter" aria-label="Đi tới chức năng">
-        <div className="sectionTitle">
-          <div>
-            <h2>Đi tới chức năng</h2>
-            <span>Phụ huynh dùng đúng công cụ hỗ trợ con mình</span>
-          </div>
-        </div>
-        <div className="commandGrid">
-          {commandItems.map((item) => {
+        <div className="adminMenuGrid parentMenuGrid">
+          {commandItems.map((item, index) => {
             const Icon = item.icon;
             return (
-              <Link className="commandCard" href={item.href} key={`parent:${item.href}:${item.label}`}>
-                <Icon size={20} />
-                <div>
-                  <strong>{item.label}</strong>
-                  <span>{item.text}</span>
-                </div>
-                <ArrowRight size={16} />
+              <Link
+                className="adminMenuCard parentMenuCard"
+                href={item.href}
+                key={`parent:${item.href}:${item.label}`}
+              >
+                <span className="adminMenuCardIndex">{String(index + 1).padStart(2, '0')}</span>
+                <span className="adminMenuCardIcon">
+                  <Icon size={20} />
+                </span>
+                <strong>{item.label}</strong>
+                <small>{item.text}</small>
               </Link>
             );
           })}

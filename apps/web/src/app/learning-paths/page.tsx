@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { USER_ROLES } from '@english-learning/shared';
 import { AppShell } from '../../components/app-shell';
 import { ApiError, apiGet, apiPatch, apiPost } from '../../lib/api';
@@ -76,11 +76,23 @@ type PathViewModel = LearningPathSummary & {
   unlockedCount: number;
   lockedCount: number;
   completionRate: number;
+  bestScore: number;
+  activeLessonId: string | null;
   currentLessonTitle: string;
   nextLockedLessonTitle: string | null;
+  stagePreview: Array<{
+    id: string;
+    name: string;
+    orderIndex: number;
+    lessonsCount: number;
+    completedCount: number;
+    lockedCount: number;
+    completionRate: number;
+  }>;
 };
 
 type ManagementFilter = 'all' | 'published' | 'draft';
+type LearningPathFilter = 'all' | 'active' | 'completed' | 'locked';
 
 const statusLabels: Record<string, string> = {
   ChuaHoc: 'Chưa học',
@@ -97,6 +109,13 @@ const managementFilterLabels: Record<ManagementFilter, string> = {
   all: 'Tất cả',
   published: 'Đã công bố',
   draft: 'Bản nháp / ẩn',
+};
+
+const learningPathFilterLabels: Record<LearningPathFilter, string> = {
+  all: 'Tất cả',
+  active: 'Đang học',
+  completed: 'Hoàn thành',
+  locked: 'Còn khóa',
 };
 
 function normalizeText(value: string) {
@@ -125,6 +144,8 @@ export default function LearningPathsPage() {
   const [managementPaths, setManagementPaths] = useState<LearningPathManagementSummary[]>([]);
   const [managementQuery, setManagementQuery] = useState('');
   const [managementFilter, setManagementFilter] = useState<ManagementFilter>('all');
+  const [studentQuery, setStudentQuery] = useState('');
+  const [studentFilter, setStudentFilter] = useState<LearningPathFilter>('all');
   const [newPathName, setNewPathName] = useState('');
   const [newPathDescription, setNewPathDescription] = useState('');
   const [newPathLevel, setNewPathLevel] = useState('A1');
@@ -246,12 +267,31 @@ export default function LearningPathsPage() {
       const completedCount = lessonStates.filter((lesson) => lesson.status === 'HoanThanh').length;
       const unlockedCount = lessonStates.filter((lesson) => lesson.canOpen && lesson.status !== 'HoanThanh').length;
       const lockedCount = lessonStates.filter((lesson) => lesson.status === 'BiKhoa').length;
+      const bestScore = lessonStates.length
+        ? Math.max(...lessonStates.map((lesson) => progressByLesson.get(lesson.id)?.bestScore ?? 0))
+        : 0;
       const activeLesson =
         lessonStates.find((lesson) => lesson.status === 'DangHoc') ??
         lessonStates.find((lesson) => lesson.status === 'ChuaHoc') ??
         lessonStates.find((lesson) => lesson.canOpen && lesson.status !== 'HoanThanh') ??
         null;
       const nextLockedLesson = lessonStates.find((lesson) => lesson.status === 'BiKhoa') ?? null;
+      const stagePreview =
+        detail?.stages.map((stage) => {
+          const stageLessons = lessonStates.filter((lesson) => lesson.stageOrder === stage.orderIndex);
+          const stageCompleted = stageLessons.filter((lesson) => lesson.status === 'HoanThanh').length;
+          const stageLocked = stageLessons.filter((lesson) => lesson.status === 'BiKhoa').length;
+
+          return {
+            id: stage.id,
+            name: stage.name,
+            orderIndex: stage.orderIndex,
+            lessonsCount: stageLessons.length,
+            completedCount: stageCompleted,
+            lockedCount: stageLocked,
+            completionRate: stageLessons.length ? Math.round((stageCompleted / stageLessons.length) * 100) : 0,
+          };
+        }) ?? [];
 
       return {
         ...path,
@@ -261,8 +301,11 @@ export default function LearningPathsPage() {
         unlockedCount,
         lockedCount,
         completionRate: lessonStates.length ? Math.round((completedCount / lessonStates.length) * 100) : 0,
+        bestScore,
+        activeLessonId: activeLesson?.id ?? null,
         currentLessonTitle: activeLesson?.title ?? 'Chưa có bài đang mở',
         nextLockedLessonTitle: nextLockedLesson?.title ?? null,
+        stagePreview,
       };
     });
   }, [pathDetails, paths, progress]);
@@ -349,7 +392,42 @@ export default function LearningPathsPage() {
   const totalLessons = pathViews.reduce((total, path) => total + path.lessonsCount, 0);
   const totalCompleted = pathViews.reduce((total, path) => total + path.completedCount, 0);
   const averageCompletion = totalLessons ? Math.round((totalCompleted / totalLessons) * 100) : 0;
-  const activePath = pathViews.find((path) => path.unlockedCount > 0 || path.completedCount > 0) ?? pathViews[0] ?? null;
+  const visiblePathViews = useMemo(() => {
+    const normalizedQuery = normalizeText(studentQuery.trim());
+
+    return pathViews
+      .filter((path) => {
+        if (studentFilter === 'active') return path.unlockedCount > 0 && path.completionRate < 100;
+        if (studentFilter === 'completed') return path.lessonsCount > 0 && path.completedCount === path.lessonsCount;
+        if (studentFilter === 'locked') return path.lockedCount > 0;
+        return true;
+      })
+      .filter((path) => {
+        if (!normalizedQuery) return true;
+
+        return normalizeText(
+          [
+            path.name,
+            path.description,
+            path.level,
+            path.targetAudience,
+            path.currentLessonTitle,
+            path.nextLockedLessonTitle ?? '',
+          ].join(' '),
+        ).includes(normalizedQuery);
+      })
+      .sort((a, b) => {
+        if (a.completionRate !== b.completionRate) return b.completionRate - a.completionRate;
+        if (a.unlockedCount !== b.unlockedCount) return b.unlockedCount - a.unlockedCount;
+        return a.name.localeCompare(b.name, 'vi');
+      });
+  }, [pathViews, studentFilter, studentQuery]);
+  const activePath =
+    visiblePathViews.find((path) => path.unlockedCount > 0 && path.completionRate < 100) ??
+    visiblePathViews.find((path) => path.completedCount > 0) ??
+    visiblePathViews[0] ??
+    pathViews[0] ??
+    null;
 
   async function handleCreatePath() {
     if (!session) return;
@@ -818,14 +896,14 @@ export default function LearningPathsPage() {
     <AppShell
       session={session}
       active="paths"
-      roleContext={USER_ROLES.ADMIN}
+      roleContext={USER_ROLES.STUDENT}
       showSidebar={false}
-      eyebrow="Learning Paths"
+      eyebrow="Học viên"
       title="Lộ trình học"
     >
-      <section className="pageHeroCompact">
+      <section className="pageHeroCompact studentPathHero">
         <div>
-          <p className="eyebrow">UC3 - Xem lộ trình học</p>
+          <p className="eyebrow">Xem lộ trình học</p>
           <h2>
             {activePath
               ? `Lộ trình đang theo dõi: ${activePath.name}`
@@ -845,11 +923,122 @@ export default function LearningPathsPage() {
       {error ? <div className="errorBox dashboardMessage">{error}</div> : null}
       {loading ? <div className="subtleBox dashboardMessage">Đang tải lộ trình...</div> : null}
 
+      {activePath ? (
+        <section className="pathStudentFocus">
+          <div className="pathStudentFocusCopy">
+            <p className="eyebrow">Nên học tiếp</p>
+            <h3>{activePath.currentLessonTitle}</h3>
+            <p>
+              Lộ trình này đang ở mức {activePath.completionRate}% hoàn thành. Học viên cần học
+              bài đang mở, làm quiz đạt yêu cầu rồi hệ thống sẽ mở khóa bài kế tiếp.
+            </p>
+            <div className="progressJourneyBadges pathLearningMeta">
+              <span>
+                <Target size={14} />
+                {activePath.name}
+              </span>
+              <span>
+                <Layers3 size={14} />
+                {activePath.stagesCount} chặng
+              </span>
+              <span>
+                <CheckCircle2 size={14} />
+                {activePath.completedCount}/{activePath.lessonsCount} bài
+              </span>
+              <span>
+                <BarChart3 size={14} />
+                Điểm tốt nhất {activePath.bestScore}
+              </span>
+            </div>
+            <div className="pathCardActions">
+              {activePath.activeLessonId ? (
+                <Link className="primaryButton" href={`/lessons/${activePath.activeLessonId}`}>
+                  Vào bài đang mở
+                  <ArrowRight size={16} />
+                </Link>
+              ) : null}
+              <Link className="secondaryButton" href={`/learning-paths/${activePath.id}`}>
+                Xem bản đồ chi tiết
+                <Compass size={16} />
+              </Link>
+            </div>
+          </div>
+
+          <div className="pathStudentFocusStats">
+            <div
+              className="pathProgressDial"
+              aria-label={`Tiến độ ${activePath.name}`}
+              style={{ '--path-progress': `${activePath.completionRate}%` } as CSSProperties}
+            >
+              <span>{activePath.completionRate}%</span>
+              <small>hoàn thành</small>
+            </div>
+            <div className="pathStudentStageTrack">
+              {activePath.stagePreview.slice(0, 4).map((stage) => (
+                <div className="pathStagePreviewItem" key={stage.id}>
+                  <div>
+                    <strong>
+                      Chặng {stage.orderIndex}: {stage.name}
+                    </strong>
+                    <span>
+                      {stage.completedCount}/{stage.lessonsCount} bài, {stage.lockedCount} khóa
+                    </span>
+                  </div>
+                  <em>{stage.completionRate}%</em>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="panel dashboardMessage pathStudentToolbar">
+        <div className="sectionTitle">
+          <div>
+            <h2>Bộ lọc lộ trình</h2>
+            <span>Tìm nhanh theo tên, cấp độ, bài đang mở hoặc trạng thái tiến độ.</span>
+          </div>
+          <span className="inlineBadge">
+            <Search size={14} />
+            {visiblePathViews.length}/{pathViews.length}
+          </span>
+        </div>
+
+        <div className="pathStudentToolbarGrid">
+          <label className="field">
+            <span>Tìm lộ trình</span>
+            <div className="parentSearchInput">
+              <Search size={16} />
+              <input
+                value={studentQuery}
+                onChange={(event) => setStudentQuery(event.target.value)}
+                placeholder="Nhập tên lộ trình, cấp độ hoặc bài đang học"
+              />
+            </div>
+          </label>
+
+          <div className="parentFilterGroup" role="tablist" aria-label="Lọc lộ trình học">
+            {(['all', 'active', 'completed', 'locked'] as LearningPathFilter[]).map((filter) => (
+              <button
+                className={`studentFilterButton ${studentFilter === filter ? 'active' : ''}`}
+                key={filter}
+                type="button"
+                onClick={() => setStudentFilter(filter)}
+                aria-pressed={studentFilter === filter}
+              >
+                <Filter size={15} />
+                {learningPathFilterLabels[filter]}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="pathInsightGrid" aria-label="Tổng quan lộ trình học">
         <div className="pathInsightCard">
           <Compass size={18} />
-          <span>Lộ trình công bố</span>
-          <strong>{pathViews.length}</strong>
+          <span>Lộ trình hiển thị</span>
+          <strong>{visiblePathViews.length}</strong>
         </div>
         <div className="pathInsightCard">
           <BookOpen size={18} />
@@ -869,8 +1058,8 @@ export default function LearningPathsPage() {
       </section>
 
       <section className="pathGrid">
-        {pathViews.map((path) => (
-          <article className="pathCard" key={path.id}>
+        {visiblePathViews.map((path) => (
+          <article className="pathCard pathLearningCard" key={path.id}>
             <div className="pathCardTop">
               <div className="featureIcon">
                 <BookOpen size={20} />
@@ -887,7 +1076,10 @@ export default function LearningPathsPage() {
             </div>
 
             <div className="progressRail" aria-label={`Tiến độ ${path.name}`}>
-              <div className="progressFill" style={{ width: `${path.completionRate}%` }} />
+              <div
+                className="progressFill"
+                style={{ width: `${path.completionRate > 0 ? Math.max(path.completionRate, 5) : 0}%` }}
+              />
             </div>
 
             <div className="pathCardStats">
@@ -909,6 +1101,22 @@ export default function LearningPathsPage() {
               ) : null}
             </div>
 
+            <div className="pathStagePreview" aria-label={`Bản đồ chặng ${path.name}`}>
+              {path.stagePreview.slice(0, 3).map((stage) => (
+                <div className="pathStagePreviewItem" key={stage.id}>
+                  <div>
+                    <strong>
+                      {stage.orderIndex}. {stage.name}
+                    </strong>
+                    <span>
+                      {stage.completedCount}/{stage.lessonsCount} bài hoàn thành
+                    </span>
+                  </div>
+                  <em>{stage.completionRate}%</em>
+                </div>
+              ))}
+            </div>
+
             <div className="featureMeta">
               <em>
                 <CheckCircle2 size={14} />
@@ -918,14 +1126,26 @@ export default function LearningPathsPage() {
               <em>{path.targetAudience}</em>
             </div>
 
-            <Link className="primaryButton fullWidth" href={`/learning-paths/${path.id}`}>
-              Xem chi tiết lộ trình
-              <ArrowRight size={16} />
-            </Link>
+            <div className="pathCardActions">
+              {path.activeLessonId ? (
+                <Link className="primaryButton" href={`/lessons/${path.activeLessonId}`}>
+                  Học tiếp
+                  <ArrowRight size={16} />
+                </Link>
+              ) : null}
+              <Link className="secondaryButton" href={`/learning-paths/${path.id}`}>
+                Chi tiết lộ trình
+                <Compass size={16} />
+              </Link>
+            </div>
           </article>
         ))}
 
-        {!pathViews.length && !loading ? <div className="subtleBox">Chưa có lộ trình công bố.</div> : null}
+        {!visiblePathViews.length && !loading ? (
+          <div className="subtleBox">
+            Không có lộ trình khớp bộ lọc hiện tại. Hãy đổi từ khóa hoặc chọn lại trạng thái.
+          </div>
+        ) : null}
       </section>
     </AppShell>
   );

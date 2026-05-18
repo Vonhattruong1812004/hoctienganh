@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 type PetSpecies = {
   code: string;
   name: string;
+  englishWord: string;
+  speech: string;
   tone: string;
   title: string;
   subtitle: string;
@@ -14,6 +16,8 @@ const petSpecies: PetSpecies[] = [
   {
     code: 'rabbit',
     name: 'Thỏ Lúa Mạch',
+    englishWord: 'rabbit',
+    speech: 'Rabbit. I can hop very fast.',
     tone: 'Nhanh nhẹn',
     title: 'Nhặt từ vựng mới mỗi ngày',
     subtitle: 'Hợp với chủ đề thức ăn, màu sắc và đồ vật học tập.',
@@ -22,6 +26,8 @@ const petSpecies: PetSpecies[] = [
   {
     code: 'turtle',
     name: 'Rùa Xanh',
+    englishWord: 'turtle',
+    speech: 'Turtle. Slow and steady wins the race.',
     tone: 'Bền bỉ',
     title: 'Học chậm mà chắc',
     subtitle: 'Hợp với ngữ pháp, lộ trình dài và tiến trình ổn định.',
@@ -30,6 +36,8 @@ const petSpecies: PetSpecies[] = [
   {
     code: 'fish',
     name: 'Cá Sao Biển',
+    englishWord: 'fish',
+    speech: 'Fish. I can swim in the water.',
     tone: 'Mềm mại',
     title: 'Bơi qua các audio ngắn',
     subtitle: 'Hợp với luyện nghe, nhịp điệu và phát âm cơ bản.',
@@ -38,6 +46,8 @@ const petSpecies: PetSpecies[] = [
   {
     code: 'penguin',
     name: 'Pingu',
+    englishWord: 'penguin',
+    speech: 'Penguin. I am Pingu the penguin.',
     tone: 'Bạn đồng hành',
     title: 'Nhân vật trung tâm của hệ thống',
     subtitle: 'Đi cùng mini game, nhiệm vụ và pet action.',
@@ -46,6 +56,8 @@ const petSpecies: PetSpecies[] = [
   {
     code: 'pig',
     name: 'Heo Bơ',
+    englishWord: 'pig',
+    speech: 'Pig. I am a happy pig.',
     tone: 'Vui tươi',
     title: 'Thu thập coin và badge',
     subtitle: 'Hợp với phần thưởng, streak và nhiệm vụ ngày.',
@@ -55,10 +67,28 @@ const petSpecies: PetSpecies[] = [
 
 export function PetGarden() {
   const [selectedCode, setSelectedCode] = useState(petSpecies[3].code);
+  const [speakingCode, setSpeakingCode] = useState('');
   const selectedPet = useMemo(
     () => petSpecies.find((pet) => pet.code === selectedCode) ?? petSpecies[3],
     [selectedCode],
   );
+
+  function speakPet(pet: PetSpecies) {
+    setSelectedCode(pet.code);
+    setSpeakingCode(pet.code);
+    window.setTimeout(() => setSpeakingCode((current) => (current === pet.code ? '' : current)), 1200);
+
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+
+    const utterance = new SpeechSynthesisUtterance(pet.speech);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.86;
+    utterance.pitch = 1.1;
+    utterance.volume = 1;
+
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  }
 
   return (
     <section id="playground-pets" className="petGarden panel">
@@ -89,6 +119,9 @@ export function PetGarden() {
           <div className="petGardenPreviewBody">
             <strong>{selectedPet.title}</strong>
             <p>{selectedPet.subtitle}</p>
+            <span className="petSpeechHint">
+              Click pet để nghe: <b>{selectedPet.speech}</b>
+            </span>
           </div>
         </div>
 
@@ -111,10 +144,10 @@ export function PetGarden() {
                 className={`petGardenSelect ${selectedCode === pet.code ? 'active' : ''}`}
                 key={pet.code}
                 type="button"
-                onClick={() => setSelectedCode(pet.code)}
+                onClick={() => speakPet(pet)}
               >
                 <span>{pet.name}</span>
-                <small>{pet.tone}</small>
+                <small>{pet.englishWord} • {pet.tone}</small>
               </button>
             ))}
           </div>
@@ -124,14 +157,27 @@ export function PetGarden() {
       <div className="petGardenGrid">
         {petSpecies.map((pet, index) => (
           <article
-            className={`petSpeciesCard ${selectedCode === pet.code ? 'active' : ''}`}
+            aria-label={`Nghe phát âm ${pet.englishWord}`}
+            className={`petSpeciesCard ${selectedCode === pet.code ? 'active' : ''} ${
+              speakingCode === pet.code ? 'speaking' : ''
+            }`}
             key={pet.code}
+            onClick={() => speakPet(pet)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                speakPet(pet);
+              }
+            }}
+            role="button"
             style={{ '--pet-card-accent': pet.accent } as CSSProperties}
+            tabIndex={0}
+            title={`Click để nghe: ${pet.speech}`}
           >
             <div className="petSpeciesTop">
               <div>
                 <strong>{pet.name}</strong>
-                <span>{pet.tone}</span>
+                <span>{pet.englishWord} • {pet.tone}</span>
               </div>
               <em>0{index + 1}</em>
             </div>
@@ -143,6 +189,7 @@ export function PetGarden() {
             <div className="petSpeciesBody">
               <h3>{pet.title}</h3>
               <p>{pet.subtitle}</p>
+              <small>{pet.speech}</small>
             </div>
           </article>
         ))}

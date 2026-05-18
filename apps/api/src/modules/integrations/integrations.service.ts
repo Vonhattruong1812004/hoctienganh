@@ -57,6 +57,16 @@ type ExternalImageAsset = {
   sourceUrl: string | null;
 };
 
+type SmartImageAsset = ExternalImageAsset & {
+  relevanceScore: number;
+  aiScore: number | null;
+  metadataScore: number;
+  accepted: boolean;
+  reason: string;
+  analysisProvider: 'openai-vision' | 'metadata-ranker';
+  detectedTags: string[];
+};
+
 type ZooAsset = {
   key: string;
   name: string;
@@ -308,6 +318,24 @@ type PexelsVideoResponse = {
   }>;
 };
 
+type OpenAiVisionRankingResponse = {
+  output_text?: string;
+  output?: Array<{
+    content?: Array<{
+      type?: string;
+      text?: string;
+    }>;
+  }>;
+};
+
+type AiImageScore = {
+  index: number;
+  score: number;
+  isMatch: boolean;
+  reason: string;
+  tags?: string[];
+};
+
 type WikimediaCommonsResponse = {
   query?: {
     pages?: Record<
@@ -346,6 +374,56 @@ type WikipediaSummaryResponse = {
   };
 };
 
+const visualTranslationRules: Array<{ patterns: string[]; terms: string[] }> = [
+  { patterns: ['trai cam', 'qua cam', 'orange fruit', 'citrus orange'], terms: ['orange fruit', 'citrus fruit'] },
+  { patterns: ['trai tao', 'qua tao', 'apple fruit'], terms: ['apple fruit'] },
+  { patterns: ['trai chuoi', 'qua chuoi', 'banana fruit'], terms: ['banana fruit'] },
+  { patterns: ['trai nho', 'qua nho', 'grape fruit'], terms: ['grapes fruit'] },
+  { patterns: ['trai dau', 'dau tay', 'strawberry'], terms: ['strawberry fruit'] },
+  { patterns: ['dua hau', 'watermelon'], terms: ['watermelon fruit'] },
+  { patterns: ['trai xoai', 'qua xoai', 'mango'], terms: ['mango fruit'] },
+  { patterns: ['trai thom', 'qua thom', 'dua thom', 'pineapple'], terms: ['pineapple fruit'] },
+  { patterns: ['cai ghe', 'ghe ngoi', 'chair'], terms: ['chair furniture'] },
+  { patterns: ['cai ban', 'ban hoc', 'ban lam viec', 'desk', 'table'], terms: ['desk table furniture'] },
+  { patterns: ['quyen sach', 'sach giao khoa', 'book'], terms: ['book classroom object'] },
+  { patterns: ['cay but', 'but bi', 'pen'], terms: ['pen stationery'] },
+  { patterns: ['but chi', 'pencil'], terms: ['pencil stationery'] },
+  { patterns: ['cuc tay', 'eraser'], terms: ['eraser stationery'] },
+  { patterns: ['thuoc ke', 'ruler'], terms: ['ruler stationery'] },
+  { patterns: ['cap sach', 'ba lo', 'backpack', 'school bag'], terms: ['school backpack'] },
+  { patterns: ['dien thoai', 'phone', 'smartphone'], terms: ['smartphone device'] },
+  { patterns: ['may tinh', 'laptop', 'computer'], terms: ['laptop computer'] },
+  { patterns: ['may in', 'printer'], terms: ['office printer'] },
+  { patterns: ['van phong', 'office'], terms: ['modern office workplace'] },
+  { patterns: ['phong hop', 'meeting room'], terms: ['office meeting room'] },
+  { patterns: ['hoa don', 'invoice'], terms: ['business invoice document'] },
+  { patterns: ['hop dong', 'contract'], terms: ['business contract document'] },
+  { patterns: ['dong vat', 'animal'], terms: ['animal wildlife'] },
+  { patterns: ['con cho', 'dog'], terms: ['dog animal'] },
+  { patterns: ['con meo', 'cat'], terms: ['cat animal'] },
+  { patterns: ['chim canh cut', 'penguin'], terms: ['penguin animal'] },
+  { patterns: ['con tho', 'rabbit'], terms: ['rabbit animal'] },
+  { patterns: ['con rua', 'turtle'], terms: ['turtle animal'] },
+  { patterns: ['con ca', 'fish'], terms: ['fish animal'] },
+  { patterns: ['con heo', 'pig'], terms: ['pig animal'] },
+  { patterns: ['sua', 'milk'], terms: ['glass of milk drink'] },
+  { patterns: ['nuoc', 'water'], terms: ['glass of water drink'] },
+  { patterns: ['banh mi', 'bread'], terms: ['bread food'] },
+  { patterns: ['com', 'rice'], terms: ['bowl of rice food'] },
+  { patterns: ['ca phe', 'coffee'], terms: ['coffee cup drink'] },
+  { patterns: ['tra', 'tea'], terms: ['tea cup drink'] },
+  { patterns: ['gia dinh', 'family'], terms: ['family parents children'] },
+  { patterns: ['bo', 'cha', 'father'], terms: ['father family'] },
+  { patterns: ['me', 'mother'], terms: ['mother family'] },
+  { patterns: ['anh trai', 'brother'], terms: ['brother family'] },
+  { patterns: ['chi gai', 'sister'], terms: ['sister family'] },
+  { patterns: ['thuc day', 'get up', 'wake up'], terms: ['wake up morning bed'] },
+  { patterns: ['danh rang', 'brush teeth'], terms: ['toothbrush toothpaste dental care'] },
+  { patterns: ['di hoc', 'go to school'], terms: ['student backpack school'] },
+  { patterns: ['di ngu', 'ngu', 'sleep'], terms: ['child sleeping bed'] },
+  { patterns: ['hoc bai', 'study'], terms: ['student studying desk books'] },
+];
+
 @Injectable()
 export class IntegrationsService {
   private readonly cache = new Map<string, CacheEntry<unknown>>();
@@ -361,6 +439,7 @@ export class IntegrationsService {
     const merriamWebsterReady = Boolean(this.getMerriamWebsterKey());
     const pixabayReady = Boolean(this.config.get<string>('PIXABAY_API_KEY'));
     const pexelsReady = Boolean(this.config.get<string>('PEXELS_API_KEY'));
+    const openAiReady = Boolean(this.config.get<string>('OPENAI_API_KEY'));
 
     return [
       {
@@ -507,6 +586,18 @@ export class IntegrationsService {
         endpoint: 'https://api.pexels.com/v1/videos/search',
         note: pexelsReady ? 'Đã sẵn sàng lấy video minh họa chất lượng cao.' : 'Thêm PEXELS_API_KEY để bật video Pexels.',
       },
+      {
+        code: 'openai-vision-ranker',
+        name: 'OpenAI Vision Image Ranker',
+        category: 'HinhAnh',
+        enabled: openAiReady,
+        ready: openAiReady,
+        requiresKey: true,
+        endpoint: 'https://api.openai.com/v1/responses',
+        note: openAiReady
+          ? 'Đã sẵn sàng phân tích ảnh ứng viên và chọn ảnh đúng ngữ cảnh bài học.'
+          : 'Thêm OPENAI_API_KEY để bật AI phân tích ảnh trước khi chọn minh họa.',
+      },
     ];
   }
 
@@ -634,6 +725,171 @@ export class IntegrationsService {
     };
   }
 
+  async getPublicImages(query: string, limit = 6) {
+    const normalizedQuery = this.clean(query);
+    const normalizedLimit = Math.min(Math.max(Number(limit || 6), 1), 12);
+
+    if (normalizedQuery.length < 2) {
+      throw new BadRequestException('Từ khóa tìm ảnh cần ít nhất 2 ký tự.');
+    }
+
+    const visualQueries = this.buildVisualSearchQueries(normalizedQuery, '', '');
+    const stopWords = new Set(['english', 'vocabulary', 'illustration', 'lesson', 'learning', 'children']);
+    const compactQuery = normalizedQuery
+      .split(/\s+/)
+      .map((word) => word.replace(/[^a-z-]/gi, '').toLowerCase())
+      .filter((word) => word.length > 1 && !stopWords.has(word))
+      .slice(0, 2)
+      .join(' ');
+    const firstKeyword = compactQuery.split(/\s+/)[0] ?? '';
+    const candidateQueries = Array.from(new Set([...visualQueries, normalizedQuery, compactQuery, firstKeyword].filter(Boolean)));
+    let images: ProviderResult<ExternalImageAsset> | null = null;
+    let usedQuery = normalizedQuery;
+
+    for (const candidateQuery of candidateQueries) {
+      images = await this.searchImages(candidateQuery, normalizedLimit);
+      usedQuery = candidateQuery;
+
+      if (images.items.length > 0) {
+        break;
+      }
+    }
+
+    return {
+      query: normalizedQuery,
+      usedQuery,
+      candidateQueries,
+      visualHints: this.getVisualKeywordHints(normalizedQuery),
+      generatedAt: new Date().toISOString(),
+      providers: [
+        {
+          name: 'Openverse',
+          ready: true,
+          note: 'Tìm ảnh mở, có nguồn/tác giả/giấy phép để dùng minh họa học tập.',
+        },
+        {
+          name: 'Wikimedia Commons',
+          ready: true,
+          note: 'Bổ sung ảnh minh họa từ kho media mở của Wikimedia.',
+        },
+        {
+          name: 'Pixabay/Pexels',
+          ready: Boolean(this.config.get<string>('PIXABAY_API_KEY') || this.config.get<string>('PEXELS_API_KEY')),
+          note: 'Tự bật khi cấu hình API key để mở rộng kho ảnh chất lượng cao.',
+        },
+      ],
+      images: images?.items ?? [],
+      warnings: [
+        ...(usedQuery !== normalizedQuery ? [`Đã mở rộng/tối giản từ khóa sang "${usedQuery}" để tìm được ảnh phù hợp hơn.`] : []),
+        ...(images?.warnings ?? []),
+      ],
+    };
+  }
+
+  async getSmartImages(query: string, meaning = '', context = '', limit = 6) {
+    const normalizedQuery = this.clean(query);
+    const normalizedMeaning = this.clean(meaning);
+    const normalizedContext = this.clean(context);
+    const normalizedLimit = Math.min(Math.max(Number(limit || 6), 1), 10);
+
+    if (normalizedQuery.length < 2) {
+      throw new BadRequestException('Từ khóa tìm ảnh cần ít nhất 2 ký tự.');
+    }
+
+    const candidateQueries = this.buildVisualSearchQueries(normalizedQuery, normalizedMeaning, normalizedContext);
+    let searchResult: ProviderResult<ExternalImageAsset> = { items: [], warnings: [] };
+
+    for (const candidateQuery of candidateQueries) {
+      const result = await this.searchImages(candidateQuery, Math.min(normalizedLimit * 3, 18));
+      searchResult = {
+        items: [...searchResult.items, ...result.items],
+        warnings: [...searchResult.warnings, ...result.warnings],
+      };
+    }
+
+    const uniqueCandidates = this.uniqueImages(searchResult.items).slice(0, Math.min(normalizedLimit * 2, 10));
+    const metadataRanked = uniqueCandidates.map((item) => ({
+      ...item,
+      metadataScore: this.scoreImageMetadata(item, normalizedQuery, normalizedMeaning, normalizedContext),
+    }));
+    const openAiReady = Boolean(this.config.get<string>('OPENAI_API_KEY'));
+    const warnings = [...searchResult.warnings];
+    let aiScores = new Map<number, AiImageScore>();
+    let analysisProvider: SmartImageAsset['analysisProvider'] = 'metadata-ranker';
+
+    if (openAiReady && metadataRanked.length) {
+      try {
+        const aiResult = await this.rankImagesWithOpenAi(
+          metadataRanked.slice(0, Math.min(metadataRanked.length, 6)),
+          normalizedQuery,
+          normalizedMeaning,
+          normalizedContext,
+        );
+        aiScores = new Map(aiResult.map((item) => [item.index, item]));
+        analysisProvider = 'openai-vision';
+      } catch (error) {
+        warnings.push(
+          `AI phân tích ảnh chưa phản hồi ổn định, dùng bộ chấm metadata: ${
+            error instanceof Error ? error.message : 'không xác định'
+          }.`,
+        );
+      }
+    } else if (!openAiReady) {
+      warnings.push('Chưa cấu hình OPENAI_API_KEY nên hệ thống đang dùng bộ chấm metadata thay cho AI vision.');
+    }
+
+    const ranked: SmartImageAsset[] = metadataRanked
+      .map((item, index) => {
+        const aiScore = aiScores.get(index);
+        const aiValue = aiScore ? this.clampScore(aiScore.score) : null;
+        const metadataValue = this.clampScore(item.metadataScore);
+        const relevanceScore =
+          aiValue === null ? metadataValue : Math.round(aiValue * 0.72 + metadataValue * 0.28);
+
+        return {
+          ...item,
+          aiScore: aiValue,
+          metadataScore: metadataValue,
+          relevanceScore,
+          accepted: aiScore ? aiScore.isMatch && relevanceScore >= 58 : relevanceScore >= 62,
+          reason:
+            aiScore?.reason ??
+            `Ảnh được chọn theo điểm metadata ${metadataValue}/100 dựa trên tiêu đề, nguồn và ngữ cảnh tìm kiếm.`,
+          analysisProvider,
+          detectedTags: aiScore?.tags ?? this.extractVisualTerms(`${item.title} ${item.source}`).slice(0, 6),
+        };
+      })
+      .sort((left, right) => Number(right.accepted) - Number(left.accepted) || right.relevanceScore - left.relevanceScore)
+      .slice(0, normalizedLimit);
+
+    return {
+      query: normalizedQuery,
+      meaning: normalizedMeaning,
+      context: normalizedContext,
+      usedQuery: candidateQueries.join(' | '),
+      candidateQueries,
+      visualHints: this.getVisualKeywordHints(normalizedQuery, normalizedMeaning, normalizedContext),
+      generatedAt: new Date().toISOString(),
+      analysisProvider,
+      providers: [
+        {
+          name: 'Openverse/Wikimedia/Pixabay/Pexels',
+          ready: true,
+          note: 'Gom nhiều ảnh ứng viên từ nguồn mở và nguồn ảnh chất lượng cao nếu có API key.',
+        },
+        {
+          name: 'OpenAI Vision Ranker',
+          ready: openAiReady,
+          note: openAiReady
+            ? 'AI đang chấm ảnh theo từ vựng, nghĩa tiếng Việt và ví dụ trong bài.'
+            : 'Thêm OPENAI_API_KEY để AI nhìn ảnh và chọn ảnh phù hợp nhất.',
+        },
+      ],
+      images: ranked,
+      warnings,
+    };
+  }
+
   async explore(userId: string, dto: ExploreContentQueryDto) {
     const query = this.clean(dto.q);
     const text = this.clean(dto.text ?? dto.q);
@@ -643,11 +899,12 @@ export class IntegrationsService {
       throw new BadRequestException('Cần nhập từ khóa để khai thác nguồn nội dung ngoài.');
     }
 
+    const visualQuery = this.buildVisualSearchQueries(query, '', '').at(0) ?? query;
     const [vocabulary, grammar, examples, images, audio, videos, knowledge, thesaurus] = await Promise.all([
       this.searchVocabulary(query, limit),
       this.searchGrammar(text),
       this.searchExamples(query, limit),
-      this.searchImages(query, limit),
+      this.searchImages(visualQuery, limit),
       this.searchAudio(query, limit),
       this.searchVideos(query, limit),
       this.searchKnowledge(query),
@@ -678,6 +935,7 @@ export class IntegrationsService {
 
     return {
       query,
+      visualQuery,
       text,
       providers: this.getSources(),
       vocabulary: vocabulary.items,
@@ -815,6 +1073,387 @@ export class IntegrationsService {
 
       return this.mergeResults(openverse, commons, pixabay, pexels);
     });
+  }
+
+  private buildVisualSearchQueries(query: string, meaning: string, context: string) {
+    const raw = this.toPlainSearchText(`${query} ${meaning} ${context}`);
+    const translatedHints = this.getVisualKeywordHints(query, meaning, context);
+    const hasRoutine = this.hasAnyVisualPattern(raw, [
+      'brush',
+      'teeth',
+      'tooth',
+      'get up',
+      'wake',
+      'sleep',
+      'school',
+      'study',
+      'daily',
+      'routine',
+    ]);
+    const hasAnimal = this.hasAnyVisualPattern(raw, ['dog', 'cat', 'rabbit', 'turtle', 'fish', 'penguin', 'animal', 'pet']);
+    const hasColor = this.hasAnyVisualPattern(raw, ['red', 'blue', 'yellow', 'green', 'circle', 'square', 'color', 'shape']);
+    const hasWeather = this.hasAnyVisualPattern(raw, ['sunny', 'rainy', 'cloudy', 'windy', 'weather']);
+    const hasFamily = this.hasAnyVisualPattern(raw, [
+      'family',
+      'father',
+      'mother',
+      'brother',
+      'sister',
+      'parent',
+      'grand',
+      'gia dinh',
+      'bo',
+      'cha',
+      'me',
+      'anh',
+      'chi',
+      'em',
+    ]);
+    const hasFood = this.hasAnyVisualPattern(raw, [
+      'food',
+      'drink',
+      'milk',
+      'water',
+      'rice',
+      'bread',
+      'apple',
+      'banana',
+      'orange',
+      'fruit',
+      'eat',
+      'do an',
+      'thuc an',
+    ]);
+    const hasClassroom = this.hasAnyVisualPattern(raw, [
+      'book',
+      'pen',
+      'pencil',
+      'ruler',
+      'eraser',
+      'classroom',
+      'school object',
+      'do vat',
+      'lop hoc',
+    ]);
+
+    const baseTerms = (translatedHints.length ? translatedHints : this.extractVisualTerms(`${query} ${meaning}`))
+      .slice(0, 5)
+      .join(' ');
+    const contextTerms = this.extractVisualTerms(context).slice(0, 6).join(' ');
+    const queries: string[] = [];
+
+    if (translatedHints.length) {
+      const hintTerms = translatedHints.slice(0, 4).join(' ');
+      queries.push(
+        hintTerms,
+        translatedHints[0],
+        `${hintTerms} clear educational photo`.trim(),
+        `${hintTerms} isolated object photo`.trim(),
+        `${hintTerms} classroom vocabulary image`.trim(),
+      );
+    }
+
+    if (/brush|teeth|tooth|rang|dental/.test(raw)) {
+      queries.push('toothbrush toothpaste', 'brushing teeth child', 'toothbrush');
+    }
+
+    if (/get up|wake|waking|morning|thuc day/.test(raw)) {
+      queries.push('wake up morning bed child', 'child waking up bed', 'morning routine child');
+    }
+
+    if (/go to school|school|di hoc|backpack/.test(raw)) {
+      queries.push('student backpack school', 'children going to school', 'school classroom student');
+    }
+
+    if (/sleep|ngu|bed|night/.test(raw)) {
+      queries.push('child sleeping bed', 'sleeping child night', 'bed pillow sleep');
+    }
+
+    if (/study|homework|hoc bai|book desk/.test(raw)) {
+      queries.push('student studying desk books', 'child doing homework', 'study English book');
+    }
+
+    if (hasFamily) {
+      queries.push('family parents children', 'family portrait parents child', 'father mother child family');
+    }
+
+    if (hasFood) {
+      queries.push('milk food drink child', 'healthy food and drinks', 'children eating food');
+    }
+
+    if (hasClassroom) {
+      queries.push('classroom objects book pencil', 'school supplies book pen', 'student desk book pencil');
+    }
+
+    if (hasRoutine) {
+      queries.push(`${baseTerms} ${contextTerms} child student daily routine educational photo`.trim());
+    }
+
+    if (hasAnimal) {
+      queries.push(`${baseTerms} ${contextTerms} animal pet clear educational photo`.trim());
+    }
+
+    if (hasColor) {
+      queries.push(`${baseTerms} ${contextTerms} color shape object educational photo`.trim());
+    }
+
+    if (hasWeather) {
+      queries.push(`${baseTerms} ${contextTerms} weather scene educational photo`.trim());
+    }
+
+    queries.push(
+      `${baseTerms} ${contextTerms} clear educational vocabulary photo`.trim(),
+      baseTerms,
+      query,
+    );
+
+    return Array.from(new Set(queries.map((item) => item.replace(/\s+/g, ' ').trim()).filter((item) => item.length >= 2))).slice(
+      0,
+      6,
+    );
+  }
+
+  private getVisualKeywordHints(...values: string[]) {
+    const raw = this.toPlainSearchText(values.join(' '));
+    const hints = visualTranslationRules.flatMap((rule) =>
+      rule.patterns.some((pattern) => this.hasVisualPattern(raw, pattern)) ? rule.terms : [],
+    );
+
+    return Array.from(new Set(hints.flatMap((hint) => this.extractVisualTerms(hint)))).slice(0, 8);
+  }
+
+  private hasVisualPattern(raw: string, pattern: string) {
+    const normalizedPattern = this.toPlainSearchText(pattern);
+    if (!normalizedPattern) return false;
+    const escaped = normalizedPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|\\s)${escaped}(\\s|$)`).test(raw);
+  }
+
+  private hasAnyVisualPattern(raw: string, patterns: string[]) {
+    return patterns.some((pattern) => this.hasVisualPattern(raw, pattern));
+  }
+
+  private toPlainSearchText(value: string) {
+    return value
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/[^a-z0-9\s-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private uniqueImages(images: ExternalImageAsset[]) {
+    const seen = new Set<string>();
+    return images.filter((image) => {
+      const key = image.thumbnailUrl ?? image.imageUrl;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  private extractVisualTerms(value: string) {
+    const stopWords = new Set([
+      'english',
+      'vocabulary',
+      'illustration',
+      'lesson',
+      'learning',
+      'children',
+      'child',
+      'photo',
+      'image',
+      'the',
+      'and',
+      'with',
+      'this',
+      'that',
+      'my',
+      'your',
+      'for',
+      'mau',
+      'cau',
+      'hoc',
+      'nghia',
+      'tieng',
+      'viet',
+    ]);
+
+    return value
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .split(/[^a-z0-9-]+/)
+      .map((word) => word.trim())
+      .filter((word) => word.length > 1 && !stopWords.has(word));
+  }
+
+  private scoreImageMetadata(item: ExternalImageAsset, query: string, meaning: string, context: string) {
+    const haystack = this.toPlainSearchText(`${item.title} ${item.source} ${item.creator ?? ''}`);
+    const translatedHints = this.getVisualKeywordHints(query, meaning, context);
+    const terms = translatedHints.length
+      ? [...translatedHints, ...this.extractVisualTerms(`${query} ${meaning} ${context}`)]
+      : this.extractVisualTerms(`${query} ${meaning} ${context}`);
+    const uniqueTerms = Array.from(new Set(terms));
+    let score = 32;
+
+    for (const term of uniqueTerms) {
+      if (haystack.includes(term)) {
+        score += term.length > 4 ? 12 : 8;
+      }
+    }
+
+    if (/svg|emoji|icon|logo|clipart|cartoon|sticker/.test(haystack)) score -= 26;
+    if (/movie|licensed|toy|brand|youtube|channel|merchandise/.test(haystack)) score -= 18;
+    if (/stock|photo|photograph|commons|flickr/.test(haystack)) score += 4;
+
+    if (translatedHints.includes('orange') || translatedHints.includes('citrus')) {
+      if (/orange|citrus|fruit|tangerine|mandarin/.test(haystack)) score += 34;
+      if (/camshaft|cam gear|distributor cam|camera|webcam|mechanical|engine|gear|tricameral/.test(haystack)) score -= 60;
+    }
+
+    if (translatedHints.includes('chair')) {
+      if (/chair|seat|furniture/.test(haystack)) score += 30;
+      if (/chairman|chairperson|committee/.test(haystack)) score -= 35;
+    }
+
+    if (translatedHints.includes('book')) {
+      if (/book|textbook|notebook|pages|library/.test(haystack)) score += 28;
+      if (/booking|facebook|comic convention/.test(haystack)) score -= 32;
+    }
+
+    if (translatedHints.includes('pen')) {
+      if (/pen|ballpoint|stationery|writing/.test(haystack)) score += 28;
+      if (/peninsula|penguin|penitentiary/.test(haystack)) score -= 32;
+    }
+
+    if (translatedHints.some((term) => ['dog', 'cat', 'rabbit', 'turtle', 'fish', 'penguin', 'pig'].includes(term))) {
+      if (/animal|wildlife|pet|zoo|species/.test(haystack)) score += 16;
+      if (/logo|mascot|team|toy|costume/.test(haystack)) score -= 20;
+    }
+
+    const rawContext = this.toPlainSearchText(`${query} ${meaning} ${context}`);
+
+    if (/brush|teeth|tooth/.test(rawContext)) {
+      if (/tooth|teeth|dental|bathroom|brush/.test(haystack)) score += 28;
+      if (/paint|makeup|hair|artist|wall/.test(haystack)) score -= 34;
+      if (/toothbrush.*toothpaste|toothpaste.*toothbrush|dental care/.test(haystack)) score += 12;
+    }
+
+    if (/get up|wake|waking/.test(rawContext)) {
+      if (/wake|waking|bed|morning|sleep/.test(haystack)) score += 24;
+      if (/exercise|stand up|business/.test(haystack)) score -= 20;
+    }
+
+    if (/go to school|school/.test(rawContext)) {
+      if (/school|student|backpack|classroom/.test(haystack)) score += 26;
+      if (/office|university building/.test(haystack)) score -= 10;
+    }
+
+    if (/sleep/.test(rawContext)) {
+      if (/sleep|bed|night|pillow/.test(haystack)) score += 26;
+      if (/animal|sleeping bag/.test(haystack)) score -= 8;
+    }
+
+    if (/study/.test(rawContext)) {
+      if (/study|student|book|desk|learn|homework/.test(haystack)) score += 26;
+      if (/scientific study|research graph/.test(haystack)) score -= 14;
+    }
+
+    if (item.thumbnailUrl) score += 4;
+    if (item.source === 'Wikimedia Commons') score += 3;
+    if (item.source === 'Pexels' || item.source === 'Pixabay') score += 5;
+
+    return this.clampScore(score);
+  }
+
+  private clampScore(score: number) {
+    return Math.max(0, Math.min(100, Math.round(score)));
+  }
+
+  private async rankImagesWithOpenAi(
+    candidates: Array<ExternalImageAsset & { metadataScore: number }>,
+    query: string,
+    meaning: string,
+    context: string,
+  ): Promise<AiImageScore[]> {
+    const apiKey = this.config.get<string>('OPENAI_API_KEY');
+    if (!apiKey) return [];
+
+    const model = this.config.get<string>('OPENAI_VISION_MODEL') ?? 'gpt-4.1-mini';
+    const candidateText = candidates
+      .map(
+        (candidate, index) =>
+          `${index}. title="${candidate.title}", source="${candidate.source}", metadataScore=${candidate.metadataScore}`,
+      )
+      .join('\n');
+
+    const payload = {
+      model,
+      input: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text:
+                `Bạn là bộ lọc ảnh cho app học tiếng Anh thiếu nhi. Chấm từng ảnh xem có phù hợp để minh họa từ vựng không.\n` +
+                `Từ/cụm từ: ${query}\nNghĩa tiếng Việt: ${meaning || 'không có'}\nNgữ cảnh bài học: ${context || 'không có'}\n` +
+                `Ứng viên:\n${candidateText}\n` +
+                `Trả về JSON thuần, không markdown: {"items":[{"index":0,"score":0-100,"isMatch":true,"reason":"ngắn gọn tiếng Việt","tags":["..."]}]}. ` +
+                `Phạt nặng ảnh sai nghĩa, ảnh chữ nhiều, ảnh trừu tượng, ảnh không phù hợp trẻ em.`,
+            },
+            ...candidates.map((candidate) => ({
+              type: 'input_image',
+              image_url: candidate.thumbnailUrl ?? candidate.imageUrl,
+              detail: 'low',
+            })),
+          ],
+        },
+      ],
+      temperature: 0.1,
+      max_output_tokens: 900,
+    };
+
+    const response = await this.fetchJson<OpenAiVisionRankingResponse>('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const outputText = this.extractOpenAiOutputText(response);
+    const parsed = JSON.parse(outputText) as { items?: AiImageScore[] };
+
+    return (parsed.items ?? [])
+      .filter((item) => Number.isInteger(item.index))
+      .map((item) => ({
+        index: item.index,
+        score: this.clampScore(Number(item.score ?? 0)),
+        isMatch: Boolean(item.isMatch),
+        reason: this.clean(item.reason ?? 'AI đã phân tích ảnh.'),
+        tags: Array.isArray(item.tags) ? item.tags.map((tag) => this.clean(String(tag))).filter(Boolean).slice(0, 6) : [],
+      }));
+  }
+
+  private extractOpenAiOutputText(response: OpenAiVisionRankingResponse) {
+    if (response.output_text) return response.output_text.trim();
+
+    const text = response.output
+      ?.flatMap((item) => item.content ?? [])
+      .map((content) => content.text ?? '')
+      .find((content) => content.trim().length > 0);
+
+    if (!text) {
+      throw new Error('OpenAI không trả về nội dung phân tích ảnh.');
+    }
+
+    return text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
   }
 
   private async searchAudio(query: string, limit: number): Promise<ProviderResult<ExternalAudioAsset>> {
@@ -1374,8 +2013,16 @@ export class IntegrationsService {
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
+      const headers = new Headers(init.headers);
+      if (!headers.has('User-Agent')) {
+        headers.set('User-Agent', 'EnglishProLearningSystem/0.1 educational-image-integration');
+      }
+      if (!headers.has('Accept')) {
+        headers.set('Accept', 'application/json');
+      }
       const response = await fetch(url, {
         ...init,
+        headers,
         signal: controller.signal,
       });
 

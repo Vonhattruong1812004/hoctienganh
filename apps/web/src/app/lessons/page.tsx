@@ -10,6 +10,7 @@ import {
   Filter,
   Layers3,
   LibraryBig,
+  LogOut,
   LockKeyhole,
   PlayCircle,
   Search,
@@ -23,8 +24,11 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { USER_ROLES } from '@english-learning/shared';
 import { AppShell } from '../../components/app-shell';
+import { ThemeToggleButton } from '../../components/theme-toggle';
 import { ApiError, apiGet, apiPatch, apiPost } from '../../lib/api';
 import { clearStoredSession, getStoredSession, type WebAuthSession } from '../../lib/session';
+import { topicLibrary, topicLibraryStages } from '../../lib/topic-library';
+import { resolveVocabularyTopic } from '../../lib/topic-meta';
 
 type LearningPathSummary = {
   id: string;
@@ -87,7 +91,6 @@ type ProgressRow = {
   bestScore: number;
 };
 
-type LessonStatus = 'TatCa' | 'ChuaHoc' | 'DangHoc' | 'HoanThanh' | 'BiKhoa';
 type LessonManagementState = 'Nhap' | 'CongBo' | 'An';
 
 const statusLabels: Record<string, string> = {
@@ -102,7 +105,6 @@ const statusLabels: Record<string, string> = {
   An: 'Đang ẩn',
 };
 
-const lessonFilters: LessonStatus[] = ['TatCa', 'DangHoc', 'ChuaHoc', 'HoanThanh', 'BiKhoa'];
 const managementFilters = ['all', 'published', 'draft'] as const;
 const lessonManagementStatusLabels: Record<LessonManagementState, string> = {
   Nhap: 'Bản nháp',
@@ -117,6 +119,7 @@ function normalizeText(value: string) {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+
 function formatDateLabel(value: string | Date | null | undefined) {
   if (!value) return 'Chưa cập nhật';
   const date = new Date(value);
@@ -129,9 +132,10 @@ export default function LessonsPage() {
   const pathname = usePathname();
   const [session, setSession] = useState<WebAuthSession | null>(null);
   const [path, setPath] = useState<LearningPathDetail | null>(null);
+  const [studentPaths, setStudentPaths] = useState<LearningPathDetail[]>([]);
+  const [selectedPathId, setSelectedPathId] = useState('');
   const [progress, setProgress] = useState<ProgressRow[]>([]);
   const [managementLessons, setManagementLessons] = useState<LessonManagementSummary[]>([]);
-  const [activeFilter, setActiveFilter] = useState<LessonStatus>('TatCa');
   const [managementFilter, setManagementFilter] = useState<(typeof managementFilters)[number]>('all');
   const [managementQuery, setManagementQuery] = useState('');
   const [selectedManagementLessonId, setSelectedManagementLessonId] = useState('');
@@ -182,12 +186,9 @@ export default function LessonsPage() {
           if (!active) return;
           setManagementLessons(lessonsResponse);
           setPath(null);
+          setStudentPaths([]);
           setProgress([]);
         } else {
-          const paths = await apiGet<LearningPathSummary[]>('/learning-paths', currentSession.accessToken);
-          const firstPath = paths[0]
-            ? await apiGet<LearningPathDetail>(`/learning-paths/${paths[0].id}`, currentSession.accessToken)
-            : null;
           const progressRows = currentSession.user.roles.includes(USER_ROLES.STUDENT)
             ? await apiGet<ProgressRow[]>(
                 `/progress/students/${currentSession.user.id}`,
@@ -196,7 +197,8 @@ export default function LessonsPage() {
             : [];
 
           if (!active) return;
-          setPath(firstPath);
+          setStudentPaths([]);
+          setSelectedPathId('');
           setProgress(progressRows);
           setManagementLessons([]);
         }
@@ -219,6 +221,15 @@ export default function LessonsPage() {
     };
   }, [isManagementMode, router, session]);
 
+  useEffect(() => {
+    if (isManagementMode) return;
+    const nextPath = studentPaths.find((item) => item.id === selectedPathId) ?? studentPaths[0] ?? null;
+    setPath(nextPath);
+    if (!selectedPathId && nextPath) {
+      setSelectedPathId(nextPath.id);
+    }
+  }, [isManagementMode, selectedPathId, studentPaths]);
+
   const progressByLesson = useMemo(
     () =>
       new Map(
@@ -234,31 +245,72 @@ export default function LessonsPage() {
     [progress],
   );
   const lessonStates = useMemo(
-    () =>
-      path?.stages.flatMap((stage) =>
+    () => {
+      if (!isManagementMode) {
+        return topicLibrary.map((topic, index) => {
+          const lessonProgress = progressByLesson.get(topic.id);
+          const status = lessonProgress?.status ?? 'ChuaHoc';
+
+          return {
+            id: topic.id,
+            title: topic.englishTitle,
+            description: topic.description,
+            level: topic.level,
+            orderIndex: index + 1,
+            passingScore: 80,
+            stageName: topic.stageName,
+            stageOrder: topic.stageOrder,
+            stageType: topic.stageType,
+            topicCategory: topic.category,
+            topicLabel: topic.title,
+            topicEnglishLabel: topic.englishTitle,
+            topicContext: topic.context,
+            status,
+            percentComplete: lessonProgress?.percentComplete ?? 0,
+            bestScore: lessonProgress?.bestScore ?? 0,
+            canOpen: true,
+            vocabularyCount: topic.vocabulary.length,
+          };
+        });
+      }
+
+      return path?.stages.flatMap((stage) =>
         stage.lessons.map((lesson) => {
           const lessonProgress = progressByLesson.get(lesson.id);
           const isFirstLesson = stage.orderIndex === 1 && lesson.orderIndex === 1;
           const status = lessonProgress?.status ?? (isFirstLesson ? 'ChuaHoc' : 'BiKhoa');
+
+          const topicMeta = resolveVocabularyTopic({
+            title: lesson.title,
+            description: lesson.description,
+            stageName: stage.name,
+            stageType: stage.type,
+            pathName: path.name,
+          });
 
           return {
             ...lesson,
             stageName: stage.name,
             stageOrder: stage.orderIndex,
             stageType: stage.type,
+            topicCategory: topicMeta.category,
+            topicLabel: topicMeta.label,
+            topicEnglishLabel: topicMeta.englishLabel,
+            topicContext: topicMeta.context,
             status,
             percentComplete: lessonProgress?.percentComplete ?? 0,
             bestScore: lessonProgress?.bestScore ?? 0,
             canOpen: status !== 'BiKhoa',
+            vocabularyCount: 0,
           };
         }),
-      ) ?? [],
-    [path?.stages, progressByLesson],
+      ) ?? [];
+    },
+    [isManagementMode, path?.stages, progressByLesson],
   );
-  const filteredLessons = lessonStates.filter((lesson) =>
-    activeFilter === 'TatCa' ? true : lesson.status === activeFilter,
-  );
-  const stageGroups = (path?.stages ?? []).map((stage) => ({
+  const filteredLessons = lessonStates;
+  const stageSource = isManagementMode ? (path?.stages ?? []) : topicLibraryStages;
+  const stageGroups = stageSource.map((stage) => ({
     ...stage,
     lessons: filteredLessons.filter((lesson) => lesson.stageOrder === stage.orderIndex),
     totalLessons: lessonStates.filter((lesson) => lesson.stageOrder === stage.orderIndex).length,
@@ -266,15 +318,6 @@ export default function LessonsPage() {
       (lesson) => lesson.stageOrder === stage.orderIndex && lesson.status === 'HoanThanh',
     ).length,
   }));
-  const completedCount = lessonStates.filter((lesson) => lesson.status === 'HoanThanh').length;
-  const unlockedCount = lessonStates.filter((lesson) => lesson.canOpen && lesson.status !== 'HoanThanh').length;
-  const lockedCount = lessonStates.filter((lesson) => lesson.status === 'BiKhoa').length;
-  const completionRate = lessonStates.length ? Math.round((completedCount / lessonStates.length) * 100) : 0;
-  const activeLesson =
-    lessonStates.find((lesson) => lesson.status === 'DangHoc') ??
-    lessonStates.find((lesson) => lesson.status === 'ChuaHoc') ??
-    lessonStates.find((lesson) => lesson.canOpen && lesson.status !== 'HoanThanh') ??
-    null;
   const visibleManagementLessons = useMemo(() => {
     const normalizedQuery = normalizeText(managementQuery.trim());
 
@@ -506,6 +549,11 @@ export default function LessonsPage() {
     } finally {
       setLessonActionBusyId('');
     }
+  }
+
+  function handleLogout() {
+    clearStoredSession();
+    router.replace('/login');
   }
 
   if (!session) {
@@ -1079,178 +1127,61 @@ export default function LessonsPage() {
   }
 
   return (
-    <AppShell session={session} active="lessons" eyebrow={path?.name ?? 'Lessons'} title="Bài học">
-      <section className="pageHeroCompact">
+    <main className="studentUcStandalone studentLessonStandalone topicLearningHub">
+      <header className="studentUcTopbar">
         <div>
-          <p className="eyebrow">Danh sách bài học</p>
-          <h2>
-            {activeLesson
-              ? `Bài nên học tiếp: ${activeLesson.title}`
-              : 'Danh sách bài học được tách riêng để học từng phần thật tập trung.'}
-          </h2>
-          <p>
-            Học viên xem được toàn bộ bài trong lộ trình, lọc theo trạng thái, biết bài nào mở, bài
-            nào khóa, tiến độ từng bài và điểm cao nhất trước khi vào học chi tiết.
-          </p>
+          <p className="eyebrow">Học viên</p>
+          <h1>Học từ vựng theo chủ đề</h1>
         </div>
-        <span className="inlineBadge">
-          <BookOpen size={16} />
-          {lessonStates.length} bài
-        </span>
-      </section>
+        <div className="topbarActions">
+          <Link className="secondaryButton" href="/dashboard">
+            Về dashboard
+          </Link>
+          <ThemeToggleButton />
+          <button className="secondaryButton" type="button" onClick={handleLogout}>
+            <LogOut size={18} />
+            Đăng xuất
+          </button>
+        </div>
+      </header>
 
       {error ? <div className="errorBox dashboardMessage">{error}</div> : null}
-      {loading ? <div className="subtleBox dashboardMessage">Đang tải bài học...</div> : null}
-
-      <section className="lessonInsightGrid" aria-label="Tổng quan danh sách bài học">
-        <div className="lessonInsightCard">
-          <BookOpen size={18} />
-          <span>Tổng bài</span>
-          <strong>{lessonStates.length}</strong>
-        </div>
-        <div className="lessonInsightCard">
-          <CheckCircle2 size={18} />
-          <span>Hoàn thành</span>
-          <strong>{completedCount}</strong>
-        </div>
-        <div className="lessonInsightCard">
-          <PlayCircle size={18} />
-          <span>Đang mở</span>
-          <strong>{unlockedCount}</strong>
-        </div>
-        <div className="lessonInsightCard">
-          <LockKeyhole size={18} />
-          <span>Bị khóa</span>
-          <strong>{lockedCount}</strong>
-        </div>
-      </section>
-
-      <section className="lessonControlPanel panel" aria-label="Bộ lọc bài học">
-        <div className="sectionTitle">
-          <div>
-            <h2>Bộ lọc bài học</h2>
-            <span>Lọc theo trạng thái để học viên tập trung đúng nhóm bài cần xử lý</span>
-          </div>
-          <span className="inlineBadge">
-            <TrendingUp size={14} />
-            {completionRate}% path
-          </span>
-        </div>
-
-        <div className="lessonFilterBar" role="tablist" aria-label="Lọc trạng thái bài học">
-          {lessonFilters.map((filter) => (
-            <button
-              className={`lessonFilterButton ${activeFilter === filter ? 'active' : ''}`}
-              key={filter}
-              type="button"
-              onClick={() => setActiveFilter(filter)}
-              aria-pressed={activeFilter === filter}
-            >
-              <Filter size={15} />
-              {statusLabels[filter]}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {activeLesson ? (
-        <section className="lessonNextPanel">
-          <div>
-            <p className="eyebrow">Bài nên học tiếp</p>
-            <h2>{activeLesson.title}</h2>
-            <p>{activeLesson.description}</p>
-            <div className="featureMeta">
-              <em>
-                <Compass size={14} />
-                Chặng {activeLesson.stageOrder}: {activeLesson.stageName}
-              </em>
-              <em>
-                <Target size={14} />
-                Đạt {activeLesson.passingScore}%
-              </em>
-              <em>
-                <Activity size={14} />
-                {activeLesson.percentComplete}% hoàn thành
-              </em>
-            </div>
-          </div>
-          <Link className="primaryButton" href={`/lessons/${activeLesson.id}`}>
-            Vào học ngay
-            <ArrowRight size={16} />
-          </Link>
-        </section>
-      ) : null}
+      {loading ? <div className="subtleBox dashboardMessage">Đang tải chủ đề từ vựng...</div> : null}
 
       <section className="lessonStageList">
         {stageGroups.map((stage) => (
           <article className="lessonStagePanel" key={stage.id}>
             <div className="sectionTitle">
               <div>
-                <h2>
-                  {stage.orderIndex}. {stage.name}
-                </h2>
-                <span>{stage.description}</span>
+                <h2>{stage.orderIndex}. {stage.name}</h2>
               </div>
-              <span className="inlineBadge">
-                <Layers3 size={14} />
-                {stage.completedLessons}/{stage.totalLessons} hoàn thành
-              </span>
             </div>
 
-            <div className="lessonCards">
+            <div className="topicCards simpleTopicList">
               {stage.lessons.map((lesson) => {
-                const Icon =
-                  lesson.status === 'HoanThanh'
-                    ? CheckCircle2
-                    : lesson.status === 'DangHoc' || lesson.status === 'ChuaHoc'
-                      ? PlayCircle
-                      : LockKeyhole;
-
                 return (
-                  <article className={`lessonListCard ${lesson.status}`} key={lesson.id}>
-                    <div className="featureIcon">
-                      <Icon size={20} />
-                    </div>
-                    <div>
-                      <strong>
-                        {lesson.orderIndex}. {lesson.title}
-                      </strong>
-                      <span>{lesson.description}</span>
-                      <div className="progressRail">
-                        <div className="progressFill" style={{ width: `${lesson.percentComplete}%` }} />
-                      </div>
-                      <div className="featureMeta">
-                        <em>{lesson.stageType}</em>
-                        <em>{statusLabels[lesson.status] ?? 'Bị khóa'}</em>
-                        <em>{lesson.percentComplete}%</em>
-                        <em>Điểm cao nhất {lesson.bestScore}</em>
-                        <em>Đạt {lesson.passingScore}%</em>
-                      </div>
-                    </div>
-                    {lesson.canOpen ? (
-                      <Link className="primaryButton" href={`/lessons/${lesson.id}`}>
-                        Mở bài học
-                        <ArrowRight size={16} />
-                      </Link>
-                    ) : (
-                      <span className="primaryButton disabledAction" aria-disabled="true">
-                        Bị khóa
-                        <LockKeyhole size={16} />
-                      </span>
-                    )}
+                  <article className="topicCard simpleTopicCard" key={lesson.id}>
+                    <strong>
+                      {lesson.orderIndex}. {lesson.topicEnglishLabel} - {lesson.topicLabel}
+                    </strong>
+                    <p>{lesson.topicContext}</p>
+                    <Link className="primaryButton" href={`/lessons/${lesson.id}/learn`}>
+                      Chọn chủ đề
+                      <ArrowRight size={16} />
+                    </Link>
                   </article>
                 );
               })}
 
               {!stage.lessons.length ? (
-                <div className="subtleBox">Không có bài học nào trong bộ lọc này.</div>
+                <div className="subtleBox">Không có chủ đề nào trong bộ lọc này.</div>
               ) : null}
             </div>
           </article>
         ))}
 
-        {!lessonStates.length && !loading ? <div className="subtleBox">Chưa có bài học công bố.</div> : null}
+        {!lessonStates.length && !loading ? <div className="subtleBox">Chưa có chủ đề từ vựng công bố.</div> : null}
       </section>
-    </AppShell>
+    </main>
   );
 }

@@ -176,7 +176,7 @@ export default function LearningPathDetailPage() {
           completionRate: lessons.length ? Math.round((completed / lessons.length) * 100) : 0,
         };
       }) ?? [],
-    [path?.stages, progressByLesson],
+    [isStaff, path?.stages, progressByLesson],
   );
   const allLessons = stageViews.flatMap((stage) =>
     stage.lessons.map((lesson) => ({
@@ -211,11 +211,11 @@ export default function LearningPathDetailPage() {
     <main className="detailPage">
       <header className="detailHero">
         <div>
-          <Link className="backLink" href="/dashboard">
+          <Link className="backLink" href="/learning-paths">
             <ArrowLeft size={16} />
-            Về dashboard
+            Về danh sách lộ trình
           </Link>
-          <p className="eyebrow">UC3 - Chi tiết lộ trình học</p>
+          <p className="eyebrow">Chi tiết lộ trình học</p>
           <h1>{path?.name ?? 'Đang tải lộ trình...'}</h1>
           <p>{path?.description}</p>
           <div className="pathHeroActions">

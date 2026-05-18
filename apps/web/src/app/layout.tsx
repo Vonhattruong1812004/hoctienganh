@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Script from 'next/script';
+import { BackNavigationButton } from '../components/back-navigation-button';
 import { ZooAmbientLayer } from '../components/zoo-ambient-layer';
 import './globals.css';
 
@@ -29,6 +30,7 @@ export default function RootLayout({
           })();
         `}</Script>
         <ZooAmbientLayer />
+        <BackNavigationButton />
         {children}
       </body>
     </html>
