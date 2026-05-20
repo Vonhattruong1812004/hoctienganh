@@ -1,12 +1,31 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
 import { BackNavigationButton } from '../components/back-navigation-button';
+import { PwaInstallButton } from '../components/pwa-install-button';
 import { ZooAmbientLayer } from '../components/zoo-ambient-layer';
 import './globals.css';
 
 export const metadata: Metadata = {
   title: 'EnglishPro Learning',
   description: 'English learning platform with paths, lessons, quizzes, and progress tracking.',
+  manifest: '/manifest.webmanifest',
+  applicationName: 'EnglishPro TOEIC',
+  appleWebApp: {
+    capable: true,
+    title: 'EnglishPro TOEIC',
+    statusBarStyle: 'default',
+  },
+  icons: {
+    icon: [
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [{ url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#0ea5e9',
 };
 
 export default function RootLayout({
@@ -31,6 +50,7 @@ export default function RootLayout({
         `}</Script>
         <ZooAmbientLayer />
         <BackNavigationButton />
+        <PwaInstallButton />
         {children}
       </body>
     </html>

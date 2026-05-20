@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="60" x2="452" y1="36" y2="476" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset=".52" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#f97316"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="22" stdDeviation="18" flood-color="#0f172a" flood-opacity=".22"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="394" cy="112" r="54" fill="#fde047"/>
+  <path d="M394 28v38M394 158v38M310 112h38M440 112h38M334 52l27 27M427 145l27 27M454 52l-27 27M361 145l-27 27" stroke="#facc15" stroke-width="16" stroke-linecap="round"/>
+  <g filter="url(#shadow)">
+    <rect x="96" y="138" width="320" height="252" rx="44" fill="#fff"/>
+    <path d="M138 196h236M138 250h170M138 304h224" stroke="#bae6fd" stroke-width="22" stroke-linecap="round"/>
+    <path d="M168 370c42-44 92-44 134 0 28-34 66-37 104-8" fill="none" stroke="#10b981" stroke-width="22" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(188 76)">
+    <ellipse cx="68" cy="118" rx="64" ry="84" fill="#0f172a"/>
+    <ellipse cx="68" cy="124" rx="28" ry="70" fill="#f8fafc"/>
+    <circle cx="42" cy="98" r="11" fill="#f8fafc"/>
+    <circle cx="94" cy="98" r="11" fill="#f8fafc"/>
+    <path d="M50 132l18 10 18-10-18 32z" fill="#fb923c"/>
+    <path d="M18 192h44M76 192h44" stroke="#fb923c" stroke-width="18" stroke-linecap="round"/>
+  </g>
+  <text x="256" y="452" text-anchor="middle" font-family="Arial, sans-serif" font-size="54" font-weight="900" fill="#fff">TOEIC</text>
+</svg>
