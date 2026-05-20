@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { ThemeToggleButton } from '../../../components/theme-toggle';
+import { getEtsAnswerKeysForQuestions } from '../../../lib/ets-answer-keys';
 import {
   etsAttemptStorageKey,
   formatEtsClock,
@@ -21,6 +22,7 @@ type AnalysisRow = {
   correct: number;
   wrong: number;
   skipped: number;
+  unchecked: number;
   questions: number[];
 };
 
@@ -60,11 +62,21 @@ export default function EtsPracticeResultPage() {
 
   const selectedParts = useMemo(() => getEtsPartsByIds(attempt?.partIds ?? []), [attempt?.partIds]);
   const activeQuestions = useMemo(() => getEtsQuestionList(selectedParts), [selectedParts]);
-  const keyAnswers = useMemo(() => parseEtsKeyText(attempt?.keyText ?? '', activeQuestions), [activeQuestions, attempt?.keyText]);
+  const autoKeyAnswers = useMemo(
+    () => getEtsAnswerKeysForQuestions(attempt?.testNumber ?? 1, activeQuestions),
+    [activeQuestions, attempt?.testNumber],
+  );
+  const pastedKeyAnswers = useMemo(() => parseEtsKeyText(attempt?.keyText ?? '', activeQuestions), [activeQuestions, attempt?.keyText]);
+  const keyAnswers = useMemo(
+    () => ({ ...autoKeyAnswers, ...pastedKeyAnswers }),
+    [autoKeyAnswers, pastedKeyAnswers],
+  );
   const selectedTest = useMemo(() => getEtsPracticeTest(attempt?.testNumber ?? 1), [attempt?.testNumber]);
   const correct = activeQuestions.filter((question) => answerStatus(question, attempt?.answers ?? {}, keyAnswers) === 'correct').length;
   const wrong = activeQuestions.filter((question) => answerStatus(question, attempt?.answers ?? {}, keyAnswers) === 'wrong').length;
   const skipped = activeQuestions.filter((question) => answerStatus(question, attempt?.answers ?? {}, keyAnswers) === 'skipped').length;
+  const unchecked = activeQuestions.filter((question) => answerStatus(question, attempt?.answers ?? {}, keyAnswers) === 'unchecked').length;
+  const keyMissing = activeQuestions.filter((question) => !keyAnswers[question]).length;
   const checkedTotal = correct + wrong;
   const accuracy = checkedTotal ? Math.round((correct / checkedTotal) * 1000) / 10 : 0;
   const scorePercent = activeQuestions.length ? Math.round((correct / activeQuestions.length) * 1000) / 10 : 0;
@@ -75,11 +87,12 @@ export default function EtsPracticeResultPage() {
       const part = selectedParts.find((item) => question >= item.from && question <= item.to);
       const insight = etsQuestionInsight(question);
       const label = `[${part?.label ?? 'Part'}] ${insight.topic}`;
-      const row = rows.get(label) ?? { label, correct: 0, wrong: 0, skipped: 0, questions: [] };
+      const row = rows.get(label) ?? { label, correct: 0, wrong: 0, skipped: 0, unchecked: 0, questions: [] };
       const status = answerStatus(question, attempt?.answers ?? {}, keyAnswers);
       if (status === 'correct') row.correct += 1;
       if (status === 'wrong') row.wrong += 1;
       if (status === 'skipped') row.skipped += 1;
+      if (status === 'unchecked') row.unchecked += 1;
       row.questions.push(question);
       rows.set(label, row);
     });
@@ -150,9 +163,10 @@ export default function EtsPracticeResultPage() {
             {correct}/{activeQuestions.length}
           </h2>
           <p>
-            Độ chính xác tính theo số câu đã có key và đã trả lời. Bên dưới có phân tích đúng, sai, bỏ qua, chủ điểm cần
-            ôn và đáp án từng câu.
+            Hệ thống tự lấy key từ bộ ETS local để chấm bài. Bên dưới có phân tích đúng, sai, bỏ qua, câu chưa chấm,
+            chủ điểm cần ôn và đáp án từng câu.
           </p>
+          {keyMissing ? <p className="etsResultWarning">Còn {keyMissing} câu chưa có key tự động, hãy mở file key gốc để đối chiếu.</p> : null}
         </div>
         <div className="etsTimerCard">
           <Target size={30} />
@@ -176,6 +190,11 @@ export default function EtsPracticeResultPage() {
           <FileText size={22} />
           <span>Bỏ qua</span>
           <strong>{skipped}</strong>
+        </article>
+        <article>
+          <FileText size={22} />
+          <span>Chưa chấm</span>
+          <strong>{unchecked}</strong>
         </article>
         <article>
           <Clock3 size={22} />
@@ -214,7 +233,7 @@ export default function EtsPracticeResultPage() {
                     <span>{row.label}</span>
                     <b>{row.correct}</b>
                     <b>{row.wrong}</b>
-                    <b>{row.skipped}</b>
+                    <b>{row.skipped + row.unchecked}</b>
                     <b>{rowAccuracy}%</b>
                     <em>{row.questions.join(' ')}</em>
                   </div>
@@ -239,21 +258,29 @@ export default function EtsPracticeResultPage() {
                     .map((question) => {
                       const status = answerStatus(question, attempt.answers, keyAnswers);
                       const chosen = attempt.answers[String(question)] ?? 'chưa trả lời';
-                      const key = keyAnswers[question] ?? '?';
+                      const key = keyAnswers[question] ?? 'chưa có key';
                       const insight = etsQuestionInsight(question);
                       const keyUrl = etsKeyAsset(attempt.testNumber, part.section);
+                      const statusLabel =
+                        status === 'correct'
+                          ? 'Đúng'
+                          : status === 'wrong'
+                            ? 'Sai'
+                            : status === 'unchecked'
+                              ? 'Chưa chấm'
+                              : 'Bỏ qua';
                       return (
                         <article className={status} key={question}>
                           <button type="button" onClick={() => setActiveDetail((current) => (current === question ? null : question))}>
                             <strong>{question}</strong>
-                            <span>
-                              {key}: {chosen}
-                            </span>
+                            <span>{statusLabel}</span>
+                            <small>Bạn chọn: {chosen}</small>
+                            <small>Đáp án: {key}</small>
                             <em>Chi tiết</em>
                           </button>
                           {activeDetail === question ? (
                             <div className="etsAnswerExplanation">
-                              <b>{status === 'correct' ? 'Đúng' : status === 'wrong' ? 'Sai' : 'Bỏ qua'}</b>
+                              <b>{statusLabel}</b>
                               <p>
                                 Bạn chọn: {chosen}. Đáp án đúng: {key}.
                               </p>

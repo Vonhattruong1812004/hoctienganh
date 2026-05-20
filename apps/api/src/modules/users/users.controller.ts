@@ -1,11 +1,14 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/auth.types';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { CreateAdminAccountDto } from './dto/create-admin-account.dto';
 import { CreateStudentSupportDto } from './dto/create-student-support.dto';
+import { UpdateAdminAccountDto } from './dto/update-admin-account.dto';
 import { UpdateStudentSupportStatusDto } from './dto/update-student-support-status.dto';
+import { UpdateUserRolesDto } from './dto/update-user-roles.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { UsersService } from './users.service';
 
@@ -36,6 +39,31 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('QuanTriVien')
+  @Get('admin/accounts/audit')
+  getAdminAccountAudit() {
+    return this.usersService.getAdminAccountAudit();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('QuanTriVien')
+  @Post('admin/accounts')
+  createAdminAccount(@Body() dto: CreateAdminAccountDto, @CurrentUser() user: AuthUser) {
+    return this.usersService.createAdminAccount(dto, user);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('QuanTriVien')
+  @Patch('admin/accounts/:userId')
+  updateAdminAccount(
+    @Param('userId') userId: string,
+    @Body() dto: UpdateAdminAccountDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.usersService.updateAdminAccount(userId, dto, user);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('QuanTriVien')
   @Patch('admin/accounts/:userId/status')
   updateUserStatus(
     @Param('userId') userId: string,
@@ -43,6 +71,24 @@ export class UsersController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.usersService.updateUserStatus(userId, dto, user);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('QuanTriVien')
+  @Patch('admin/accounts/:userId/roles')
+  updateUserRoles(
+    @Param('userId') userId: string,
+    @Body() dto: UpdateUserRolesDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.usersService.updateUserRoles(userId, dto, user);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('QuanTriVien')
+  @Delete('admin/accounts/:userId')
+  deleteAdminAccount(@Param('userId') userId: string, @CurrentUser() user: AuthUser) {
+    return this.usersService.deleteAdminAccount(userId, user);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

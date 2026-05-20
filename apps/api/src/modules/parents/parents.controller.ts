@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -22,6 +22,11 @@ export class ParentsController {
     return this.parentsService.findQuizResults(user.id);
   }
 
+  @Get('me/learning-audit')
+  findMyLearningAudit(@CurrentUser() user: AuthUser) {
+    return this.parentsService.findLearningAudit(user.id);
+  }
+
   @Get('me/review-suggestions')
   findMyReviewSuggestions(@CurrentUser() user: AuthUser) {
     return this.parentsService.findReviewSuggestions(user.id);
@@ -30,5 +35,10 @@ export class ParentsController {
   @Get('me/notifications')
   findMyNotifications(@CurrentUser() user: AuthUser) {
     return this.parentsService.findNotifications(user.id);
+  }
+
+  @Patch('me/notifications/:notificationId/read')
+  markNotificationAsRead(@CurrentUser() user: AuthUser, @Param('notificationId') notificationId: string) {
+    return this.parentsService.markNotificationAsRead(user.id, notificationId);
   }
 }

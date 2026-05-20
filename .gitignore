@@ -13,3 +13,9 @@ coverage
 docker/postgres/data
 docker/redis/data
 /ETS/
+
+# Generated TOEIC PDF image assets are large; regenerate locally from scripts when needed.
+apps/web/public/ets/part5/
+apps/web/public/ets/part5-groups/
+apps/web/public/ets/part6-groups/
+apps/web/public/ets/part7-groups/

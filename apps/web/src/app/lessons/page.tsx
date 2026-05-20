@@ -7,17 +7,24 @@ import {
   BookOpen,
   CheckCircle2,
   Compass,
+  Edit3,
   Filter,
   Layers3,
   LibraryBig,
   LogOut,
   LockKeyhole,
   PlayCircle,
+  Plus,
+  RefreshCw,
+  Save,
   Search,
   ShieldAlert,
   Sparkles,
   Target,
+  Trash2,
   TrendingUp,
+  Wand2,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -27,8 +34,8 @@ import { AppShell } from '../../components/app-shell';
 import { ThemeToggleButton } from '../../components/theme-toggle';
 import { ApiError, apiGet, apiPatch, apiPost } from '../../lib/api';
 import { clearStoredSession, getStoredSession, type WebAuthSession } from '../../lib/session';
-import { topicLibrary, topicLibraryStages } from '../../lib/topic-library';
-import { resolveVocabularyTopic } from '../../lib/topic-meta';
+import { topicLibrary, topicLibraryStages, type LibraryTopic } from '../../lib/topic-library';
+import { resolveVocabularyTopic, topicCategoryFilters, type TopicVocabularyWord } from '../../lib/topic-meta';
 
 type LearningPathSummary = {
   id: string;
@@ -93,6 +100,52 @@ type ProgressRow = {
 
 type LessonManagementState = 'Nhap' | 'CongBo' | 'An';
 
+type TeacherTopicDraft = {
+  title: string;
+  englishTitle: string;
+  description: string;
+  category: LibraryTopic['category'];
+  level: LibraryTopic['level'];
+};
+
+type TeacherTopicStore = {
+  overrides: Record<string, LibraryTopic>;
+  customTopics: LibraryTopic[];
+  deletedIds: string[];
+};
+
+type ExploreContentResponse = {
+  query: string;
+  vocabulary: Array<{
+    word: string;
+    meaning: string;
+    pronunciation: string | null;
+    example: string | null;
+    audioUrl: string | null;
+    tags?: string[];
+  }>;
+  examples: Array<{
+    sentence: string;
+    translation: string | null;
+    audioUrl: string | null;
+  }>;
+  images: Array<{
+    imageUrl: string;
+    thumbnailUrl: string | null;
+  }>;
+  warnings: string[];
+};
+
+const TEACHER_TOPIC_STORAGE_KEY = 'englishpro:teacher-topic-manager:v1';
+
+const defaultTopicDraft: TeacherTopicDraft = {
+  title: '',
+  englishTitle: '',
+  description: '',
+  category: 'ToeicVanPhong',
+  level: 'A2',
+};
+
 const statusLabels: Record<string, string> = {
   TatCa: 'Tất cả',
   ChuaHoc: 'Chưa học',
@@ -119,12 +172,231 @@ function normalizeText(value: string) {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+function slugifyLocal(value: string) {
+  return normalizeText(value)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+}
+
+function normalizeTeacherText(value: string) {
+  const compact = value.replace(/\s+/g, ' ').trim();
+  const typoMap: Record<string, string> = {
+    recieve: 'receive',
+    recive: 'receive',
+    bussiness: 'business',
+    buisness: 'business',
+    enviroment: 'environment',
+    accomodation: 'accommodation',
+    resturant: 'restaurant',
+    tranportation: 'transportation',
+    managment: 'management',
+    comunication: 'communication',
+    invocie: 'invoice',
+    shedule: 'schedule',
+    trái: 'trái',
+  };
+
+  return compact
+    .split(/\s+/)
+    .map((word) => typoMap[word.toLowerCase()] ?? word)
+    .join(' ');
+}
+
+function guessTopicCategory(title: string, description: string): LibraryTopic['category'] {
+  const resolved = resolveVocabularyTopic({
+    title,
+    description,
+    topicName: title,
+    content: description,
+  });
+
+  return resolved?.category ?? 'ToeicVanPhong';
+}
+
+function getTopicCategoryLabel(category: LibraryTopic['category']) {
+  return topicCategoryFilters.find((item) => item.key === category)?.label ?? 'TOEIC';
+}
+
+function readTeacherTopicStore(): TeacherTopicStore {
+  if (typeof window === 'undefined') {
+    return { overrides: {}, customTopics: [], deletedIds: [] };
+  }
+
+  try {
+    const raw = window.localStorage.getItem(TEACHER_TOPIC_STORAGE_KEY);
+    if (!raw) return { overrides: {}, customTopics: [], deletedIds: [] };
+    const parsed = JSON.parse(raw) as Partial<TeacherTopicStore>;
+    return {
+      overrides: parsed.overrides ?? {},
+      customTopics: Array.isArray(parsed.customTopics) ? parsed.customTopics : [],
+      deletedIds: Array.isArray(parsed.deletedIds) ? parsed.deletedIds : [],
+    };
+  } catch {
+    return { overrides: {}, customTopics: [], deletedIds: [] };
+  }
+}
+
+function writeTeacherTopicStore(store: TeacherTopicStore) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(TEACHER_TOPIC_STORAGE_KEY, JSON.stringify(store));
+}
+
+function withTeacherTopicOverride(topic: LibraryTopic, vocabulary?: TopicVocabularyWord[]) {
+  return {
+    ...topic,
+    vocabulary: vocabulary ?? topic.vocabulary,
+  };
+}
+
+function buildWordExample(word: string, title: string) {
+  const cleanWord = normalizeTeacherText(word).toLowerCase();
+  if (!cleanWord) return '';
+  if (cleanWord.includes(' ')) {
+    return `The ${cleanWord} is important in ${title.toLowerCase()}.`;
+  }
+  return `The team uses ${cleanWord} in ${title.toLowerCase()}.`;
+}
+
+function buildWordExampleMeaning(word: string, title: string) {
+  return `Câu ví dụ dùng "${word}" trong chủ đề ${title}.`;
+}
+
+function normalizeTeacherVocabularyWord(
+  item: Partial<TopicVocabularyWord>,
+  index: number,
+  topicTitle: string,
+): TopicVocabularyWord {
+  const word = normalizeTeacherText(item.word ?? '');
+  const meaning = normalizeTeacherText(item.meaning ?? '') || `từ vựng trong chủ đề ${topicTitle}`;
+  const example = normalizeTeacherText(item.example ?? '') || buildWordExample(word, topicTitle);
+
+  return {
+    id: item.id || `teacher-word-${index + 1}-${slugifyLocal(word || String(index + 1))}`,
+    word,
+    meaning,
+    phonetic: item.phonetic ?? null,
+    wordType: item.wordType ?? 'noun',
+    example,
+    exampleMeaning: normalizeTeacherText(item.exampleMeaning ?? '') || buildWordExampleMeaning(word, topicTitle),
+    audioUrl: item.audioUrl ?? null,
+    imageUrl: item.imageUrl ?? null,
+  };
+}
+
+function buildGeneratedVocabulary(
+  draft: TeacherTopicDraft,
+  external?: ExploreContentResponse | null,
+): TopicVocabularyWord[] {
+  const query = draft.englishTitle || draft.title;
+  const categoryPool = topicLibrary
+    .filter((topic) => topic.category === draft.category)
+    .flatMap((topic) => topic.vocabulary);
+  const searchPool = topicLibrary
+    .filter((topic) =>
+      normalizeText(`${topic.title} ${topic.englishTitle} ${topic.description}`).includes(normalizeText(query)),
+    )
+    .flatMap((topic) => topic.vocabulary);
+  const externalWords =
+    external?.vocabulary.map<Partial<TopicVocabularyWord>>((item, index) => ({
+      id: `external-${index + 1}-${slugifyLocal(item.word)}`,
+      word: item.word,
+      meaning: item.meaning,
+      phonetic: item.pronunciation,
+      wordType: item.tags?.[0] ?? 'noun',
+      example: item.example ?? external.examples[index % Math.max(external.examples.length, 1)]?.sentence ?? null,
+      exampleMeaning: external.examples[index % Math.max(external.examples.length, 1)]?.translation ?? null,
+      audioUrl: item.audioUrl,
+      imageUrl: external.images[index % Math.max(external.images.length, 1)]?.imageUrl ?? null,
+    })) ?? [];
+  const titleWords = query
+    .split(/\s+/)
+    .map((word) => word.replace(/[^a-zA-Z-]/g, '').toLowerCase())
+    .filter((word) => word.length > 2)
+    .map<Partial<TopicVocabularyWord>>((word) => ({
+      word,
+      meaning: `từ khóa ${word} trong chủ đề`,
+      wordType: 'keyword',
+    }));
+  const merged = [...externalWords, ...searchPool, ...categoryPool, ...titleWords];
+  const unique = new Map<string, Partial<TopicVocabularyWord>>();
+
+  merged.forEach((item) => {
+    const key = normalizeText(item.word ?? '');
+    if (key && !unique.has(key)) unique.set(key, item);
+  });
+
+  let index = 1;
+  while (unique.size < 100) {
+    unique.set(`generated-${index}`, {
+      word: `${slugifyLocal(query) || 'toeic'} expression ${index}`,
+      meaning: `cụm diễn đạt ${index} trong chủ đề ${draft.title || query}`,
+      wordType: 'phrase',
+    });
+    index += 1;
+  }
+
+  return Array.from(unique.values())
+    .slice(0, 100)
+    .map((item, wordIndex) => normalizeTeacherVocabularyWord(item, wordIndex, draft.title || draft.englishTitle));
+}
+
+function buildTeacherTopic(draft: TeacherTopicDraft, vocabulary: TopicVocabularyWord[], id?: string): LibraryTopic {
+  const title = normalizeTeacherText(draft.title);
+  const englishTitle = normalizeTeacherText(draft.englishTitle || draft.title);
+  const category = draft.category;
+  const categoryLabel = getTopicCategoryLabel(category);
+  const topicId = id ?? `teacher-topic-${slugifyLocal(englishTitle || title)}-${Date.now()}`;
+
+  return {
+    id: topicId,
+    title,
+    englishTitle,
+    category,
+    categoryLabel,
+    level: draft.level,
+    stageId: `teacher-stage-${slugifyLocal(category)}`,
+    stageName: `Chủ đề giáo viên - ${categoryLabel}`,
+    stageOrder: 1,
+    stageType: 'TuVungToeic',
+    description: normalizeTeacherText(draft.description) || `Chủ đề ${englishTitle} cho lớp TOEIC.`,
+    context: normalizeTeacherText(draft.description) || `Từ vựng TOEIC theo chủ đề ${englishTitle}.`,
+    vocabulary,
+  };
+}
 
 function formatDateLabel(value: string | Date | null | undefined) {
   if (!value) return 'Chưa cập nhật';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Chưa cập nhật';
   return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium' }).format(date);
+}
+
+function getTopicAssetStatus(topic: LibraryTopic) {
+  const wordCount = topic.vocabulary.length;
+  const exampleCount = topic.vocabulary.filter((word) => Boolean(word.example)).length;
+  const imageCount = topic.vocabulary.filter((word) => Boolean(word.imageUrl)).length;
+  const audioCount = topic.vocabulary.filter((word) => Boolean(word.audioUrl)).length;
+  const gamePairs = Math.min(8, wordCount);
+  const readiness = Math.min(
+    100,
+    Math.round(
+      (wordCount >= 100 ? 40 : (wordCount / 100) * 40) +
+        (exampleCount >= 100 ? 25 : (exampleCount / 100) * 25) +
+        (gamePairs >= 8 ? 15 : (gamePairs / 8) * 15) +
+        (imageCount ? 10 : 0) +
+        (audioCount ? 10 : 0),
+    ),
+  );
+  const warnings = [
+    wordCount < 100 ? 'Chủ đề chưa đủ tối thiểu 100 từ.' : null,
+    exampleCount < wordCount ? 'Một số từ chưa có ví dụ ngữ cảnh.' : null,
+    imageCount === 0 ? 'Chưa gắn ảnh thật/ảnh minh họa cho từ vựng.' : null,
+    audioCount === 0 ? 'Chưa gắn file audio nguồn ngoài cho từ vựng.' : null,
+    gamePairs < 8 ? 'Game ôn tập chưa đủ 8 cặp từ.' : null,
+  ].filter((warning): warning is string => Boolean(warning));
+
+  return { wordCount, exampleCount, imageCount, audioCount, gamePairs, readiness, warnings };
 }
 
 export default function LessonsPage() {
@@ -139,6 +411,20 @@ export default function LessonsPage() {
   const [managementFilter, setManagementFilter] = useState<(typeof managementFilters)[number]>('all');
   const [managementQuery, setManagementQuery] = useState('');
   const [selectedManagementLessonId, setSelectedManagementLessonId] = useState('');
+  const [teacherTopicQuery, setTeacherTopicQuery] = useState('');
+  const [teacherTopicCategory, setTeacherTopicCategory] = useState('TatCa');
+  const [selectedTeacherTopicId, setSelectedTeacherTopicId] = useState('');
+  const [teacherTopicStore, setTeacherTopicStore] = useState<TeacherTopicStore>({
+    overrides: {},
+    customTopics: [],
+    deletedIds: [],
+  });
+  const [topicDraft, setTopicDraft] = useState<TeacherTopicDraft>(defaultTopicDraft);
+  const [topicAiBusy, setTopicAiBusy] = useState(false);
+  const [topicAiMessage, setTopicAiMessage] = useState('');
+  const [topicEditMode, setTopicEditMode] = useState(false);
+  const [selectedTeacherWordId, setSelectedTeacherWordId] = useState('');
+  const [wordDraft, setWordDraft] = useState<Partial<TopicVocabularyWord>>({});
   const [newLessonTitle, setNewLessonTitle] = useState('');
   const [newLessonDescription, setNewLessonDescription] = useState('');
   const [newLessonContent, setNewLessonContent] = useState('');
@@ -172,6 +458,21 @@ export default function LessonsPage() {
 
     setSession(storedSession);
   }, [pathname, router]);
+
+  useEffect(() => {
+    if (!session) return;
+    setTeacherTopicStore(readTeacherTopicStore());
+  }, [session]);
+
+  useEffect(() => {
+    writeTeacherTopicStore(teacherTopicStore);
+  }, [teacherTopicStore]);
+
+  useEffect(() => {
+    if (!selectedTeacherTopicId) return;
+    setSelectedTeacherWordId('');
+    setWordDraft({});
+  }, [selectedTeacherTopicId]);
 
   useEffect(() => {
     if (!session) return;
@@ -449,6 +750,83 @@ export default function LessonsPage() {
         Number(focusManagementLesson.quizzesCount ?? 0) === 0 ? 'Chưa có quiz liên kết.' : null,
       ].filter((warning): warning is string => Boolean(warning))
     : [];
+  const editableTeacherTopics = useMemo(() => {
+    const deleted = new Set(teacherTopicStore.deletedIds);
+    const base = topicLibrary
+      .filter((topic) => !deleted.has(topic.id))
+      .map((topic) => teacherTopicStore.overrides[topic.id] ?? topic);
+    const custom = teacherTopicStore.customTopics.filter((topic) => !deleted.has(topic.id));
+    return [...custom, ...base];
+  }, [teacherTopicStore]);
+  const teacherTopicCategories = useMemo(() => {
+    const map = new Map<string, string>();
+    editableTeacherTopics.forEach((topic) => {
+      map.set(topic.category, topic.categoryLabel);
+    });
+    return [{ key: 'TatCa', label: 'Tất cả chủ đề' }, ...Array.from(map, ([key, label]) => ({ key, label }))];
+  }, [editableTeacherTopics]);
+  const visibleTeacherTopics = useMemo(() => {
+    const query = normalizeText(teacherTopicQuery.trim());
+
+    return editableTeacherTopics
+      .filter((topic) => teacherTopicCategory === 'TatCa' || topic.category === teacherTopicCategory)
+      .filter((topic) => {
+        if (!query) return true;
+        return normalizeText(
+          [
+            topic.title,
+            topic.englishTitle,
+            topic.categoryLabel,
+            topic.stageName,
+            topic.description,
+            topic.context,
+            topic.vocabulary.slice(0, 24).map((word) => word.word).join(' '),
+          ].join(' '),
+        ).includes(query);
+      });
+  }, [editableTeacherTopics, teacherTopicCategory, teacherTopicQuery]);
+  const selectedTeacherTopic = useMemo(
+    () =>
+      visibleTeacherTopics.find((topic) => topic.id === selectedTeacherTopicId) ??
+      visibleTeacherTopics[0] ??
+      null,
+    [selectedTeacherTopicId, visibleTeacherTopics],
+  );
+  const teacherTopicStats = useMemo(() => {
+    const totalWords = editableTeacherTopics.reduce((sum, topic) => sum + topic.vocabulary.length, 0);
+    const fullTopics = editableTeacherTopics.filter((topic) => topic.vocabulary.length >= 100).length;
+    const totalExamples = editableTeacherTopics.reduce(
+      (sum, topic) => sum + topic.vocabulary.filter((word) => Boolean(word.example)).length,
+      0,
+    );
+    const assetWarnings = editableTeacherTopics.filter((topic) => getTopicAssetStatus(topic).warnings.length > 0).length;
+
+    return {
+      totalTopics: editableTeacherTopics.length,
+      totalWords,
+      fullTopics,
+      totalExamples,
+      assetWarnings,
+    };
+  }, [editableTeacherTopics]);
+  const selectedTopicStatus = selectedTeacherTopic ? getTopicAssetStatus(selectedTeacherTopic) : null;
+
+  useEffect(() => {
+    if (!selectedTeacherWordId || !selectedTeacherTopic) return;
+    const word = selectedTeacherTopic.vocabulary.find((item) => item.id === selectedTeacherWordId);
+    setWordDraft(word ? { ...word } : {});
+  }, [selectedTeacherTopic, selectedTeacherWordId]);
+
+  useEffect(() => {
+    if (!visibleTeacherTopics.length) {
+      if (selectedTeacherTopicId) setSelectedTeacherTopicId('');
+      return;
+    }
+
+    if (!selectedTeacherTopicId || !visibleTeacherTopics.some((topic) => topic.id === selectedTeacherTopicId)) {
+      setSelectedTeacherTopicId(visibleTeacherTopics[0].id);
+    }
+  }, [selectedTeacherTopicId, visibleTeacherTopics]);
 
   useEffect(() => {
     if (!visibleManagementLessons.length) {
@@ -471,6 +849,176 @@ export default function LessonsPage() {
       setNewLessonTopicId(topicOptions[0].id);
     }
   }, [newLessonStageId, newLessonTopicId, stageOptions, topicOptions]);
+
+  function persistTeacherTopic(topic: LibraryTopic) {
+    setTeacherTopicStore((current) => {
+      const isBaseTopic = topicLibrary.some((item) => item.id === topic.id);
+      if (isBaseTopic) {
+        return {
+          ...current,
+          deletedIds: current.deletedIds.filter((id) => id !== topic.id),
+          overrides: {
+            ...current.overrides,
+            [topic.id]: topic,
+          },
+        };
+      }
+
+      const existing = current.customTopics.some((item) => item.id === topic.id);
+      return {
+        ...current,
+        deletedIds: current.deletedIds.filter((id) => id !== topic.id),
+        customTopics: existing
+          ? current.customTopics.map((item) => (item.id === topic.id ? topic : item))
+          : [topic, ...current.customTopics],
+      };
+    });
+  }
+
+  async function handleGenerateTeacherTopic() {
+    if (!session) return;
+    setError('');
+    setSuccessMessage('');
+    setTopicAiMessage('');
+    setTopicAiBusy(true);
+
+    try {
+      const correctedTitle = normalizeTeacherText(topicDraft.englishTitle || topicDraft.title);
+      const correctedVietnameseTitle = normalizeTeacherText(topicDraft.title || correctedTitle);
+      const correctedDescription = normalizeTeacherText(topicDraft.description);
+      const category = topicDraft.category || guessTopicCategory(correctedTitle, correctedDescription);
+      const normalizedDraft: TeacherTopicDraft = {
+        ...topicDraft,
+        title: correctedVietnameseTitle,
+        englishTitle: correctedTitle,
+        description: correctedDescription,
+        category,
+      };
+
+      let external: ExploreContentResponse | null = null;
+      try {
+        const params = new URLSearchParams({
+          q: normalizedDraft.englishTitle,
+          text: normalizedDraft.description || normalizedDraft.englishTitle,
+          limit: '20',
+        });
+        external = await apiGet<ExploreContentResponse>(`/integrations/explore?${params.toString()}`, session.accessToken);
+      } catch (err) {
+        const message =
+          err instanceof ApiError && err.status === 0
+            ? 'API ngoài chưa phản hồi, hệ thống dùng kho TOEIC nội bộ để sinh bản nháp.'
+            : 'Nguồn ngoài chưa đủ ổn định, hệ thống dùng kho TOEIC nội bộ để sinh bản nháp.';
+        setTopicAiMessage(message);
+      }
+
+      const vocabulary = buildGeneratedVocabulary(normalizedDraft, external);
+      const topic = buildTeacherTopic(normalizedDraft, vocabulary);
+      persistTeacherTopic(topic);
+      setSelectedTeacherTopicId(topic.id);
+      setTopicDraft(defaultTopicDraft);
+      setTopicAiMessage(
+        external
+          ? `AI đã chuẩn hóa tên chủ đề, lấy ${external.vocabulary.length} từ từ nguồn ngoài và sinh đủ ${vocabulary.length} từ.`
+          : `AI đã chuẩn hóa tên chủ đề và sinh đủ ${vocabulary.length} từ từ kho TOEIC nội bộ.`,
+      );
+      setSuccessMessage(`Đã thêm chủ đề "${topic.englishTitle}" vào danh sách quản lý.`);
+    } finally {
+      setTopicAiBusy(false);
+    }
+  }
+
+  function handleLoadTopicForEdit(topic: LibraryTopic) {
+    setTopicEditMode(true);
+    setTopicDraft({
+      title: topic.title,
+      englishTitle: topic.englishTitle,
+      description: topic.description,
+      category: topic.category,
+      level: topic.level,
+    });
+    setSelectedTeacherTopicId(topic.id);
+  }
+
+  function handleSaveTopicDetails() {
+    if (!selectedTeacherTopic) return;
+    const normalizedDraft: TeacherTopicDraft = {
+      title: normalizeTeacherText(topicDraft.title || selectedTeacherTopic.title),
+      englishTitle: normalizeTeacherText(topicDraft.englishTitle || selectedTeacherTopic.englishTitle),
+      description: normalizeTeacherText(topicDraft.description || selectedTeacherTopic.description),
+      category: topicDraft.category || selectedTeacherTopic.category,
+      level: topicDraft.level || selectedTeacherTopic.level,
+    };
+    const nextTopic = buildTeacherTopic(normalizedDraft, selectedTeacherTopic.vocabulary, selectedTeacherTopic.id);
+    persistTeacherTopic(nextTopic);
+    setTopicEditMode(false);
+    setSelectedTeacherTopicId(nextTopic.id);
+    setSuccessMessage(`Đã cập nhật chủ đề "${nextTopic.englishTitle}".`);
+  }
+
+  function handleDeleteTeacherTopic(topicId: string) {
+    const topic = editableTeacherTopics.find((item) => item.id === topicId);
+    setTeacherTopicStore((current) => ({
+      overrides: Object.fromEntries(Object.entries(current.overrides).filter(([id]) => id !== topicId)),
+      customTopics: current.customTopics.filter((item) => item.id !== topicId),
+      deletedIds: Array.from(new Set([...current.deletedIds, topicId])),
+    }));
+    setSelectedTeacherTopicId('');
+    setSuccessMessage(topic ? `Đã xóa chủ đề "${topic.englishTitle}" khỏi danh sách.` : 'Đã xóa chủ đề.');
+  }
+
+  function handleSelectTeacherWord(word: TopicVocabularyWord) {
+    setSelectedTeacherWordId(word.id);
+    setWordDraft({ ...word });
+  }
+
+  function handleNewTeacherWord() {
+    setSelectedTeacherWordId('');
+    setWordDraft({
+      word: '',
+      meaning: '',
+      wordType: 'noun',
+      example: '',
+      exampleMeaning: '',
+      phonetic: '',
+      imageUrl: '',
+      audioUrl: '',
+    });
+  }
+
+  function handleSaveTeacherWord() {
+    if (!selectedTeacherTopic) return;
+    const normalized = normalizeTeacherVocabularyWord(
+      {
+        ...wordDraft,
+        id: wordDraft.id || `teacher-word-${Date.now()}`,
+      },
+      selectedTeacherTopic.vocabulary.length,
+      selectedTeacherTopic.title,
+    );
+    if (!normalized.word) {
+      setError('Cần nhập từ vựng trước khi lưu.');
+      return;
+    }
+
+    const exists = selectedTeacherTopic.vocabulary.some((word) => word.id === normalized.id);
+    const vocabulary = exists
+      ? selectedTeacherTopic.vocabulary.map((word) => (word.id === normalized.id ? normalized : word))
+      : [normalized, ...selectedTeacherTopic.vocabulary];
+    persistTeacherTopic(withTeacherTopicOverride(selectedTeacherTopic, vocabulary));
+    setSelectedTeacherWordId(normalized.id);
+    setWordDraft(normalized);
+    setError('');
+    setSuccessMessage(`Đã lưu từ "${normalized.word}" trong chủ đề ${selectedTeacherTopic.englishTitle}.`);
+  }
+
+  function handleDeleteTeacherWord(wordId: string) {
+    if (!selectedTeacherTopic) return;
+    const vocabulary = selectedTeacherTopic.vocabulary.filter((word) => word.id !== wordId);
+    persistTeacherTopic(withTeacherTopicOverride(selectedTeacherTopic, vocabulary));
+    setSelectedTeacherWordId('');
+    setWordDraft({});
+    setSuccessMessage('Đã xóa từ khỏi chủ đề.');
+  }
 
   async function handleCreateLesson() {
     if (!session) return;
@@ -561,6 +1109,445 @@ export default function LessonsPage() {
       <main className="loadingShell">
         <p>Đang tải bài học...</p>
       </main>
+    );
+  }
+
+  if (isManagementMode && !isAdmin) {
+    return (
+      <AppShell
+        session={session}
+        active="lessons"
+        roleContext={USER_ROLES.TEACHER}
+        showSidebar={false}
+        eyebrow="Giáo viên"
+        title="Quản lý chủ đề từ vựng TOEIC"
+      >
+        <section className="teacherTopicHero panel">
+          <div>
+            <p className="eyebrow">CRUD chủ đề từ vựng</p>
+            <h2>Thêm, sửa, xóa chủ đề và bộ từ vựng TOEIC bằng AI hỗ trợ.</h2>
+            <p>
+              Giáo viên nhập tên chủ đề và mô tả, hệ thống chuẩn hóa chính tả, khai thác nguồn ngoài nếu có,
+              sinh bộ từ gợi ý rồi đưa vào danh sách để tiếp tục chỉnh từng từ.
+            </p>
+          </div>
+          <div className="teacherTopicHeroStats">
+            <span>
+              <BookOpen size={16} />
+              {teacherTopicStats.totalTopics} chủ đề
+            </span>
+            <span>
+              <Layers3 size={16} />
+              {teacherTopicStats.totalWords} từ
+            </span>
+            <span>
+              <CheckCircle2 size={16} />
+              {teacherTopicStats.fullTopics} đủ 100 từ
+            </span>
+            <span>
+              <ShieldAlert size={16} />
+              {teacherTopicStats.assetWarnings} cần rà soát
+            </span>
+          </div>
+        </section>
+
+        {error ? <div className="errorBox dashboardMessage">{error}</div> : null}
+        {successMessage ? <div className="successBox dashboardMessage">{successMessage}</div> : null}
+        {topicAiMessage ? <div className="subtleBox dashboardMessage">{topicAiMessage}</div> : null}
+        {loading ? <div className="subtleBox dashboardMessage">Đang đồng bộ kho chủ đề TOEIC...</div> : null}
+
+        <section className="teacherTopicBuilder panel">
+          <div className="sectionTitle">
+            <div>
+              <h2>{topicEditMode ? 'Sửa chủ đề đang chọn' : 'Thêm chủ đề bằng AI'}</h2>
+              <span>AI hỗ trợ sửa chính tả, phân nhóm TOEIC và sinh đủ bộ từ vựng ban đầu.</span>
+            </div>
+            <button className="secondaryButton" type="button" onClick={() => {
+              setTopicEditMode(false);
+              setTopicDraft(defaultTopicDraft);
+            }}>
+              <X size={15} />
+              Làm mới
+            </button>
+          </div>
+
+          <div className="teacherTopicFormGrid">
+            <label className="field">
+              <span>Tên tiếng Việt</span>
+              <input
+                value={topicDraft.title}
+                onChange={(event) => {
+                  const title = event.target.value;
+                  setTopicDraft((current) => ({
+                    ...current,
+                    title,
+                    category: guessTopicCategory(current.englishTitle || title, current.description),
+                  }));
+                }}
+                placeholder="Ví dụ: Trái cây, Văn phòng, Sân bay..."
+              />
+            </label>
+            <label className="field">
+              <span>Tên / keyword tiếng Anh</span>
+              <input
+                value={topicDraft.englishTitle}
+                onChange={(event) => {
+                  const englishTitle = event.target.value;
+                  setTopicDraft((current) => ({
+                    ...current,
+                    englishTitle,
+                    category: guessTopicCategory(englishTitle, current.description),
+                  }));
+                }}
+                placeholder="Ví dụ: Fruits, Office routines, Airport travel..."
+              />
+            </label>
+            <label className="field">
+              <span>Nhóm TOEIC</span>
+              <select
+                value={topicDraft.category}
+                onChange={(event) =>
+                  setTopicDraft((current) => ({
+                    ...current,
+                    category: event.target.value as LibraryTopic['category'],
+                  }))
+                }
+              >
+                {topicCategoryFilters
+                  .filter((category) => category.key !== 'TatCa')
+                  .map((category) => (
+                    <option value={category.key} key={category.key}>
+                      {category.label}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Cấp độ</span>
+              <select
+                value={topicDraft.level}
+                onChange={(event) =>
+                  setTopicDraft((current) => ({
+                    ...current,
+                    level: event.target.value as LibraryTopic['level'],
+                  }))
+                }
+              >
+                {['A1', 'A2', 'B1', 'B2'].map((level) => (
+                  <option value={level} key={level}>
+                    {level}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field teacherTopicDescriptionField">
+              <span>Mô tả chủ đề</span>
+              <textarea
+                value={topicDraft.description}
+                onChange={(event) => {
+                  const description = event.target.value;
+                  setTopicDraft((current) => ({
+                    ...current,
+                    description,
+                    category: guessTopicCategory(current.englishTitle || current.title, description),
+                  }));
+                }}
+                placeholder="Mô tả ngữ cảnh học, ví dụ: từ vựng TOEIC về cuộc họp, báo cáo, email và lịch làm việc..."
+              />
+            </label>
+          </div>
+
+          <div className="teacherTopicBuilderActions">
+            {topicEditMode ? (
+              <button className="primaryButton" type="button" onClick={handleSaveTopicDetails}>
+                <Save size={15} />
+                Lưu thay đổi chủ đề
+              </button>
+            ) : (
+              <button
+                className="primaryButton"
+                type="button"
+                onClick={handleGenerateTeacherTopic}
+                disabled={topicAiBusy || !(topicDraft.title || topicDraft.englishTitle)}
+              >
+                {topicAiBusy ? <RefreshCw size={15} /> : <Wand2 size={15} />}
+                {topicAiBusy ? 'Đang sinh chủ đề...' : 'Phân tích và thêm chủ đề'}
+              </button>
+            )}
+          </div>
+        </section>
+
+        <section className="teacherTopicToolbar panel">
+          <label className="field">
+            <span>Tìm chủ đề / từ khóa</span>
+            <div className="parentSearchInput">
+              <Search size={16} />
+              <input
+                value={teacherTopicQuery}
+                onChange={(event) => setTeacherTopicQuery(event.target.value)}
+                placeholder="office, invoice, airport, meeting..."
+              />
+            </div>
+          </label>
+          <label className="field">
+            <span>Nhóm TOEIC</span>
+            <select value={teacherTopicCategory} onChange={(event) => setTeacherTopicCategory(event.target.value)}>
+              {teacherTopicCategories.map((category) => (
+                <option value={category.key} key={category.key}>
+                  {category.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="inlineBadge">
+            <Filter size={14} />
+            {visibleTeacherTopics.length}/{editableTeacherTopics.length}
+          </span>
+        </section>
+
+        <section className="teacherTopicWorkspace">
+          <div className="teacherTopicListPanel panel">
+            <div className="sectionTitle">
+              <div>
+                <h2>Danh sách chủ đề</h2>
+                <span>Chọn một chủ đề để xem độ sẵn sàng và mở màn rà soát.</span>
+              </div>
+            </div>
+
+            <div className="teacherTopicGrid">
+              {visibleTeacherTopics.map((topic) => {
+                const status = getTopicAssetStatus(topic);
+                const active = selectedTeacherTopic?.id === topic.id;
+
+                return (
+                  <article className={`teacherTopicCard ${active ? 'active' : ''}`} key={topic.id}>
+                    <div className="teacherTopicCardHead">
+                      <div>
+                        <p className="eyebrow">{topic.categoryLabel}</p>
+                        <strong>{topic.englishTitle}</strong>
+                        <span>{topic.title}</span>
+                      </div>
+                      <em>{topic.level}</em>
+                    </div>
+
+                    <p>{topic.description}</p>
+
+                    <div className="teacherTopicMeta">
+                      <span>{topic.vocabulary.length} từ</span>
+                      <span>{status.exampleCount} ví dụ</span>
+                      <span>{status.gamePairs} cặp game</span>
+                      <span>{status.readiness}% sẵn sàng</span>
+                    </div>
+
+                    <div className="progressRail" aria-label={`Độ sẵn sàng ${topic.englishTitle}`}>
+                      <div className="progressFill" style={{ width: `${status.readiness}%` }} />
+                    </div>
+
+                    <div className="teacherTopicActions">
+                      <button className="secondaryButton" type="button" onClick={() => setSelectedTeacherTopicId(topic.id)}>
+                        Xem nhanh
+                      </button>
+                      <button className="secondaryButton" type="button" onClick={() => handleLoadTopicForEdit(topic)}>
+                        <Edit3 size={14} />
+                        Sửa
+                      </button>
+                      <button className="dangerButton" type="button" onClick={() => handleDeleteTeacherTopic(topic.id)}>
+                        <Trash2 size={14} />
+                        Xóa
+                      </button>
+                      <Link className="primaryButton" href={`/lessons/${topic.id}/game`}>
+                        Game
+                        <ArrowRight size={14} />
+                      </Link>
+                    </div>
+                  </article>
+                );
+              })}
+
+              {!visibleTeacherTopics.length && !loading ? (
+                <div className="subtleBox">Không có chủ đề TOEIC nào khớp bộ lọc hiện tại.</div>
+              ) : null}
+            </div>
+          </div>
+
+          <aside className="teacherTopicDetail panel">
+            {selectedTeacherTopic && selectedTopicStatus ? (
+              <>
+                <div className="teacherTopicDetailHead">
+                  <p className="eyebrow">{selectedTeacherTopic.stageName}</p>
+                  <h2>{selectedTeacherTopic.englishTitle}</h2>
+                  <span>{selectedTeacherTopic.context}</span>
+                </div>
+
+                <div className="teacherTopicScore" style={{ '--score-fill': `${selectedTopicStatus.readiness}%` } as CSSProperties}>
+                  <strong>{selectedTopicStatus.readiness}%</strong>
+                  <small>sẵn sàng</small>
+                </div>
+
+                <div className="teacherTopicChecklist">
+                  <div>
+                    <CheckCircle2 size={16} />
+                    <span>100 từ vựng TOEIC theo chủ đề</span>
+                    <strong>{selectedTeacherTopic.vocabulary.length}/100</strong>
+                  </div>
+                  <div>
+                    <CheckCircle2 size={16} />
+                    <span>Ví dụ ngữ cảnh cho từng từ</span>
+                    <strong>{selectedTopicStatus.exampleCount}</strong>
+                  </div>
+                  <div>
+                    <PlayCircle size={16} />
+                    <span>Game Flash Match dùng bộ từ này</span>
+                    <strong>{selectedTopicStatus.gamePairs} cặp</strong>
+                  </div>
+                  <div className={selectedTopicStatus.imageCount ? '' : 'warning'}>
+                    <ShieldAlert size={16} />
+                    <span>Ảnh minh họa cần rà soát</span>
+                    <strong>{selectedTopicStatus.imageCount}</strong>
+                  </div>
+                  <div className={selectedTopicStatus.audioCount ? '' : 'warning'}>
+                    <ShieldAlert size={16} />
+                    <span>Audio nguồn ngoài cần rà soát</span>
+                    <strong>{selectedTopicStatus.audioCount}</strong>
+                  </div>
+                </div>
+
+                <div className="teacherTopicWordPreview">
+                  {selectedTeacherTopic.vocabulary.slice(0, 18).map((word) => (
+                    <span key={word.id}>
+                      <strong>{word.word}</strong>
+                      <small>{word.meaning}</small>
+                    </span>
+                  ))}
+                </div>
+
+                <div className="teacherTopicWarnings">
+                  {selectedTopicStatus.warnings.map((warning) => (
+                    <div key={warning}>
+                      <ShieldAlert size={14} />
+                      <span>{warning}</span>
+                    </div>
+                  ))}
+                  {!selectedTopicStatus.warnings.length ? (
+                    <div>
+                      <CheckCircle2 size={14} />
+                      <span>Chủ đề đã đủ dữ liệu nền để học viên học và chơi.</span>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="teacherWordManager">
+                  <div className="sectionTitle compact">
+                    <div>
+                      <h3>Quản lý từ vựng trong chủ đề</h3>
+                      <span>Thêm, sửa, xóa từ; AI chuẩn hóa chính tả và câu ví dụ trước khi lưu.</span>
+                    </div>
+                    <button className="secondaryButton" type="button" onClick={handleNewTeacherWord}>
+                      <Plus size={14} />
+                      Thêm từ
+                    </button>
+                  </div>
+
+                  <div className="teacherWordEditor">
+                    <div className="teacherWordList">
+                      {selectedTeacherTopic.vocabulary.slice(0, 100).map((word) => (
+                        <button
+                          className={word.id === selectedTeacherWordId ? 'active' : ''}
+                          type="button"
+                          key={word.id}
+                          onClick={() => handleSelectTeacherWord(word)}
+                        >
+                          <strong>{word.word}</strong>
+                          <span>{word.meaning}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="teacherWordForm">
+                      <label className="field">
+                        <span>Từ tiếng Anh</span>
+                        <input
+                          value={wordDraft.word ?? ''}
+                          onChange={(event) => setWordDraft((current) => ({ ...current, word: event.target.value }))}
+                          placeholder="invoice, agenda, apple..."
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Nghĩa tiếng Việt</span>
+                        <input
+                          value={wordDraft.meaning ?? ''}
+                          onChange={(event) => setWordDraft((current) => ({ ...current, meaning: event.target.value }))}
+                          placeholder="hóa đơn, chương trình họp..."
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Loại từ</span>
+                        <input
+                          value={wordDraft.wordType ?? ''}
+                          onChange={(event) => setWordDraft((current) => ({ ...current, wordType: event.target.value }))}
+                          placeholder="noun, verb, adjective..."
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Phiên âm</span>
+                        <input
+                          value={wordDraft.phonetic ?? ''}
+                          onChange={(event) => setWordDraft((current) => ({ ...current, phonetic: event.target.value }))}
+                          placeholder="/ˈɪn.vɔɪs/"
+                        />
+                      </label>
+                      <label className="field teacherTopicDescriptionField">
+                        <span>Câu ví dụ</span>
+                        <textarea
+                          value={wordDraft.example ?? ''}
+                          onChange={(event) => setWordDraft((current) => ({ ...current, example: event.target.value }))}
+                          placeholder="The team reviewed the invoice before payment."
+                        />
+                      </label>
+                      <label className="field teacherTopicDescriptionField">
+                        <span>Dịch câu ví dụ</span>
+                        <textarea
+                          value={wordDraft.exampleMeaning ?? ''}
+                          onChange={(event) => setWordDraft((current) => ({ ...current, exampleMeaning: event.target.value }))}
+                          placeholder="Nhóm đã xem lại hóa đơn trước khi thanh toán."
+                        />
+                      </label>
+
+                      <div className="teacherTopicActions detail">
+                        <button className="primaryButton" type="button" onClick={handleSaveTeacherWord}>
+                          <Save size={14} />
+                          Lưu từ
+                        </button>
+                        {wordDraft.id ? (
+                          <button className="dangerButton" type="button" onClick={() => handleDeleteTeacherWord(String(wordDraft.id))}>
+                            <Trash2 size={14} />
+                            Xóa từ
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="teacherTopicActions detail">
+                  <Link className="secondaryButton" href="/dashboard">
+                    Về dashboard
+                  </Link>
+                  <Link className="secondaryButton" href={`/lessons/${selectedTeacherTopic.id}/learn`}>
+                    Mở màn học
+                  </Link>
+                  <Link className="primaryButton" href={`/lessons/${selectedTeacherTopic.id}/game`}>
+                    Kiểm game chủ đề
+                    <ArrowRight size={14} />
+                  </Link>
+                </div>
+              </>
+            ) : (
+              <div className="subtleBox">Chọn một chủ đề TOEIC để xem chi tiết quản lý.</div>
+            )}
+          </aside>
+        </section>
+      </AppShell>
     );
   }
 

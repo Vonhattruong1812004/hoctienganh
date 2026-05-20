@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "start": "nest start",
+    "prestart:dev": "node ../../scripts/free-dev-ports.mjs 4100",
     "start:dev": "nest start --watch",
     "build": "nest build",
     "lint": "eslint \"src/**/*.ts\"",

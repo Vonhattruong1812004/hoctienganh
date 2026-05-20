@@ -22,10 +22,10 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState, type CSSProperties, type ComponentType } from 'react';
-import { USER_ROLES } from '@english-learning/shared';
+import { useEffect, useMemo, useState, type CSSProperties, type ComponentType, type FormEvent } from 'react';
+import { USER_ROLES, type UserRole } from '@english-learning/shared';
 import { AppShell } from '../../components/app-shell';
-import { ApiError, apiGet, apiPatch, apiPost } from '../../lib/api';
+import { ApiError, apiDelete, apiGet, apiPatch, apiPost } from '../../lib/api';
 import { clearStoredSession, getStoredSession, type WebAuthSession } from '../../lib/session';
 
 type LinkedStudent = {
@@ -94,6 +94,28 @@ type AdminAccount = {
   publishedQuizzes: number;
 };
 
+type AdminAccountAuditLog = {
+  id: string;
+  actorName: string | null;
+  actorEmail: string | null;
+  action: string;
+  description: string | null;
+  targetId: string | null;
+  createdAt: string;
+};
+
+type AdminAccountForm = {
+  id: string;
+  mode: 'create' | 'edit';
+  fullName: string;
+  email: string;
+  password: string;
+  phone: string;
+  gender: '' | 'Nam' | 'Nu' | 'Khac';
+  status: AdminAccount['status'];
+  roles: UserRole[];
+};
+
 const filterOptions = [
   { key: 'all', label: 'Tất cả', description: 'Hiển thị toàn bộ học viên đã liên kết' },
   { key: 'needs-support', label: 'Cần hỗ trợ', description: 'Nhóm có tiến độ thấp hoặc bài bị khóa nhiều' },
@@ -128,6 +150,25 @@ const adminStatusFilters = [
   { key: 'NgungHoatDong', label: 'Ngừng hoạt động' },
 ] as const;
 
+const adminAssignableRoles: UserRole[] = [
+  USER_ROLES.STUDENT,
+  USER_ROLES.PARENT,
+  USER_ROLES.TEACHER,
+  USER_ROLES.ADMIN,
+];
+
+const emptyAdminAccountForm: AdminAccountForm = {
+  id: '',
+  mode: 'create',
+  fullName: '',
+  email: '',
+  password: '',
+  phone: '',
+  gender: '',
+  status: 'HoatDong',
+  roles: [USER_ROLES.STUDENT],
+};
+
 export default function StudentsPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -135,6 +176,7 @@ export default function StudentsPage() {
   const [students, setStudents] = useState<LinkedStudent[]>([]);
   const [supportSuggestions, setSupportSuggestions] = useState<TeacherSupportSuggestion[]>([]);
   const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
+  const [adminAuditLogs, setAdminAuditLogs] = useState<AdminAccountAuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -144,6 +186,11 @@ export default function StudentsPage() {
   const [adminRoleFilter, setAdminRoleFilter] = useState<(typeof adminRoleFilters)[number]['key']>('all');
   const [adminStatusFilter, setAdminStatusFilter] = useState<(typeof adminStatusFilters)[number]['key']>('all');
   const [adminBusyAccountId, setAdminBusyAccountId] = useState('');
+  const [adminRoleBusyAccountId, setAdminRoleBusyAccountId] = useState('');
+  const [adminFormOpen, setAdminFormOpen] = useState(false);
+  const [adminForm, setAdminForm] = useState<AdminAccountForm>(emptyAdminAccountForm);
+  const [adminFormBusy, setAdminFormBusy] = useState(false);
+  const [adminDeleteBusyAccountId, setAdminDeleteBusyAccountId] = useState('');
   const [selectedSupportStudentId, setSelectedSupportStudentId] = useState('');
   const [supportFeedback, setSupportFeedback] = useState('');
   const [supportPriority, setSupportPriority] = useState(1);
@@ -179,9 +226,13 @@ export default function StudentsPage() {
         );
 
         if (isAdminMode) {
-          const response = await apiGet<AdminAccount[]>('/users/admin/accounts', currentSession.accessToken);
+          const [response, auditResponse] = await Promise.all([
+            apiGet<AdminAccount[]>('/users/admin/accounts', currentSession.accessToken),
+            apiGet<AdminAccountAuditLog[]>('/users/admin/accounts/audit', currentSession.accessToken),
+          ]);
           if (!active) return;
           setAdminAccounts(response);
+          setAdminAuditLogs(auditResponse);
           return;
         }
 
@@ -364,6 +415,16 @@ export default function StudentsPage() {
   }, [adminAccounts, adminRoleFilter, adminStatusFilter, query]);
   const isCurrentUserAdmin = !!session?.user.roles.includes(USER_ROLES.ADMIN);
 
+  async function refreshAdminAudit() {
+    if (!session?.user.roles.includes(USER_ROLES.ADMIN)) return;
+    try {
+      const auditResponse = await apiGet<AdminAccountAuditLog[]>('/users/admin/accounts/audit', session.accessToken);
+      setAdminAuditLogs(auditResponse);
+    } catch {
+      // Audit refresh is secondary; keep the main CRUD flow responsive.
+    }
+  }
+
   async function handleCreateSupport() {
     if (!session || !selectedSupportStudent) return;
     setError('');
@@ -454,6 +515,7 @@ export default function StudentsPage() {
       );
       setAdminAccounts((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       setSuccessMessage(`Đã cập nhật trạng thái của ${updated.fullName} thành ${formatAccountStatus(updated.status)}.`);
+      await refreshAdminAudit();
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         clearStoredSession();
@@ -463,6 +525,200 @@ export default function StudentsPage() {
       setError(err instanceof Error ? err.message : 'Không cập nhật được trạng thái tài khoản.');
     } finally {
       setAdminBusyAccountId('');
+    }
+  }
+
+  async function handleToggleAdminRole(account: AdminAccount, role: UserRole) {
+    if (!session) return;
+    setError('');
+    setSuccessMessage('');
+
+    const hasRole = account.roles.includes(role);
+    const nextRoles = hasRole ? account.roles.filter((item) => item !== role) : [...account.roles, role];
+
+    if (!nextRoles.length) {
+      setError('Tài khoản phải có ít nhất một vai trò.');
+      return;
+    }
+
+    if (account.id === session.user.id && role === USER_ROLES.ADMIN && hasRole) {
+      setError('Bạn không thể tự gỡ quyền quản trị viên của tài khoản đang đăng nhập.');
+      return;
+    }
+
+    setAdminRoleBusyAccountId(account.id);
+    try {
+      const updated = await apiPatch<AdminAccount>(
+        `/users/admin/accounts/${account.id}/roles`,
+        { roles: nextRoles },
+        session.accessToken,
+      );
+      setAdminAccounts((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setSuccessMessage(`Đã cập nhật phân quyền cho ${updated.fullName}.`);
+      await refreshAdminAudit();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        clearStoredSession();
+        router.replace('/login');
+        return;
+      }
+      setError(err instanceof Error ? err.message : 'Không cập nhật được phân quyền tài khoản.');
+    } finally {
+      setAdminRoleBusyAccountId('');
+    }
+  }
+
+  function openCreateAdminAccountForm() {
+    setError('');
+    setSuccessMessage('');
+    setAdminForm(emptyAdminAccountForm);
+    setAdminFormOpen(true);
+  }
+
+  function openEditAdminAccountForm(account: AdminAccount) {
+    setError('');
+    setSuccessMessage('');
+    setAdminForm({
+      id: account.id,
+      mode: 'edit',
+      fullName: account.fullName,
+      email: account.email,
+      password: '',
+      phone: account.phone ?? '',
+      gender: (account.gender as AdminAccountForm['gender']) ?? '',
+      status: account.status,
+      roles: account.roles as UserRole[],
+    });
+    setAdminFormOpen(true);
+  }
+
+  function toggleAdminFormRole(role: UserRole) {
+    setAdminForm((current) => {
+      const enabled = current.roles.includes(role);
+      const roles = enabled ? current.roles.filter((item) => item !== role) : [...current.roles, role];
+      return { ...current, roles };
+    });
+  }
+
+  async function handleSubmitAdminAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!session) return;
+    setError('');
+    setSuccessMessage('');
+
+    const fullName = adminForm.fullName.trim();
+    const email = adminForm.email.trim().toLowerCase();
+    const phone = adminForm.phone.trim();
+
+    if (fullName.length < 2) {
+      setError('Tên tài khoản cần ít nhất 2 ký tự.');
+      return;
+    }
+
+    if (!email.includes('@')) {
+      setError('Email tài khoản không hợp lệ.');
+      return;
+    }
+
+    if (adminForm.mode === 'create' && adminForm.password.length < 6) {
+      setError('Mật khẩu tài khoản mới cần ít nhất 6 ký tự.');
+      return;
+    }
+
+    if (!adminForm.roles.length) {
+      setError('Tài khoản phải có ít nhất một vai trò.');
+      return;
+    }
+
+    if (adminForm.id === session.user.id && !adminForm.roles.includes(USER_ROLES.ADMIN)) {
+      setError('Bạn không thể tự gỡ quyền quản trị viên của tài khoản đang đăng nhập.');
+      return;
+    }
+
+    setAdminFormBusy(true);
+    try {
+      if (adminForm.mode === 'create') {
+        const created = await apiPost<AdminAccount>(
+          '/users/admin/accounts',
+          {
+            fullName,
+            email,
+            password: adminForm.password,
+            phone: phone || null,
+            gender: adminForm.gender || null,
+            status: adminForm.status,
+            roles: adminForm.roles,
+          },
+          session.accessToken,
+        );
+        setAdminAccounts((current) => [created, ...current]);
+        setSuccessMessage(`Đã tạo tài khoản ${created.fullName}.`);
+        await refreshAdminAudit();
+      } else {
+        await apiPatch<AdminAccount>(
+          `/users/admin/accounts/${adminForm.id}`,
+          {
+            fullName,
+            email,
+            password: adminForm.password || undefined,
+            phone: phone || null,
+            gender: adminForm.gender || null,
+            status: adminForm.status,
+          },
+          session.accessToken,
+        );
+        const roleUpdated = await apiPatch<AdminAccount>(
+          `/users/admin/accounts/${adminForm.id}/roles`,
+          { roles: adminForm.roles },
+          session.accessToken,
+        );
+        setAdminAccounts((current) => current.map((item) => (item.id === adminForm.id ? roleUpdated : item)));
+        setSuccessMessage(`Đã cập nhật tài khoản ${roleUpdated.fullName}.`);
+        await refreshAdminAudit();
+      }
+
+      setAdminFormOpen(false);
+      setAdminForm(emptyAdminAccountForm);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        clearStoredSession();
+        router.replace('/login');
+        return;
+      }
+      setError(err instanceof Error ? err.message : 'Không lưu được tài khoản.');
+    } finally {
+      setAdminFormBusy(false);
+    }
+  }
+
+  async function handleDeleteAdminAccount(account: AdminAccount) {
+    if (!session) return;
+    setError('');
+    setSuccessMessage('');
+
+    if (account.id === session.user.id) {
+      setError('Bạn không thể tự xóa tài khoản đang đăng nhập.');
+      return;
+    }
+
+    const confirmed = window.confirm(`Xóa tài khoản ${account.fullName}? Thao tác này sẽ xóa dữ liệu liên quan theo ràng buộc hệ thống.`);
+    if (!confirmed) return;
+
+    setAdminDeleteBusyAccountId(account.id);
+    try {
+      await apiDelete<{ id: string; deleted: boolean }>(`/users/admin/accounts/${account.id}`, session.accessToken);
+      setAdminAccounts((current) => current.filter((item) => item.id !== account.id));
+      setSuccessMessage(`Đã xóa tài khoản ${account.fullName}.`);
+      await refreshAdminAudit();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        clearStoredSession();
+        router.replace('/login');
+        return;
+      }
+      setError(err instanceof Error ? err.message : 'Không xóa được tài khoản.');
+    } finally {
+      setAdminDeleteBusyAccountId('');
     }
   }
 
@@ -481,17 +737,16 @@ export default function StudentsPage() {
         active="students"
         roleContext={USER_ROLES.ADMIN}
         showSidebar={false}
-        eyebrow="Quản lý người dùng"
-        title="Bảng điều khiển tài khoản"
+        eyebrow="Quản trị viên"
+        title="Quản lý tài khoản và phân quyền"
       >
         <section className="adminUserHero">
           <div className="adminUserHeroCopy">
-            <p className="eyebrow">Quản trị viên đang điều phối tài khoản hệ thống</p>
-            <h2>Kiểm soát người dùng, vai trò, trạng thái và sức khỏe tài khoản trong một màn hình.</h2>
+            <p className="eyebrow">UC1 • Account & Access Control</p>
+            <h2>Kiểm soát tài khoản, vai trò actor và trạng thái truy cập trong một màn hình riêng.</h2>
             <p>
-              Đây là trung tâm vận hành cho UC quản lý người dùng: tìm nhanh tài khoản, lọc theo vai trò và
-              trạng thái, xem mức độ hoạt động, khóa hoặc mở khóa tài khoản khi cần và theo dõi dữ liệu
-              học tập liên quan ở một nơi duy nhất.
+              Admin dùng UC này để rà soát người dùng, kiểm tra vai trò Học viên, Phụ huynh, Giáo viên,
+              Quản trị viên, khóa hoặc mở lại tài khoản và đối chiếu quyền truy cập theo nghiệp vụ TOEIC.
             </p>
             <div className="adminHeroMeta">
               <span>
@@ -534,24 +789,28 @@ export default function StudentsPage() {
         {loading ? <div className="subtleBox dashboardMessage">Đang đồng bộ tài khoản...</div> : null}
 
         <section className="metricGrid adminUserMetricGrid" aria-label="Chỉ số người dùng">
-          <Metric icon={Users} label="Tài khoản" value={adminSummary.totalAccounts} note="Toàn bộ người dùng" />
+          <Metric icon={Users} label="Tổng tài khoản" value={adminSummary.totalAccounts} note="Toàn bộ người dùng" />
           <Metric icon={UserCheck} label="Đang hoạt động" value={adminSummary.activeAccounts} note="Trạng thái tốt" />
           <Metric icon={UserX} label="Đang khóa" value={adminSummary.lockedAccounts} note="Cần xem lại" />
-          <Metric icon={ShieldCheck} label="Dữ liệu học tập" value={adminSummary.avgProgress} note="Tiến độ trung bình %" />
-          <Metric icon={Target} label="Điểm tích lũy" value={adminSummary.totalPoints} note="Tổng điểm toàn hệ thống" />
-          <Metric icon={Clock3} label="Chuỗi học tốt nhất" value={adminSummary.bestStreak} note="Ngày liên tiếp cao nhất" />
+          <Metric icon={ShieldAlert} label="Ngừng hoạt động" value={adminSummary.suspendedAccounts} note="Tài khoản tạm ngưng" />
+          <Metric icon={GraduationCap} label="Giáo viên" value={adminSummary.teacherCount} note="Có quyền quản lý nội dung" />
+          <Metric icon={ShieldCheck} label="Quản trị viên" value={adminSummary.adminCount} note="Có quyền hệ thống" />
         </section>
 
         <section className="panel adminUserToolbar" aria-label="Bộ lọc tài khoản">
           <div className="sectionTitle">
             <div>
-              <h2>Danh sách tài khoản</h2>
-              <span>Tìm kiếm theo tên, email, số điện thoại, vai trò hoặc trạng thái.</span>
+              <h2>Danh sách tài khoản và vai trò</h2>
+              <span>Tìm kiếm, lọc actor, kiểm tra trạng thái và thao tác khóa/mở tài khoản.</span>
             </div>
             <span className="inlineBadge">
               <Mail size={14} />
               {visibleAdminAccounts.length}/{adminSummary.totalAccounts}
             </span>
+            <button className="primaryButton" type="button" onClick={openCreateAdminAccountForm}>
+              Thêm tài khoản
+              <UserCheck size={16} />
+            </button>
           </div>
 
           <div className="adminToolbarGrid">
@@ -594,6 +853,126 @@ export default function StudentsPage() {
           </div>
         </section>
 
+        {adminFormOpen ? (
+          <section className="panel adminAccountFormPanel" aria-label="Biểu mẫu quản lý tài khoản">
+            <div className="sectionTitle">
+              <div>
+                <h2>{adminForm.mode === 'create' ? 'Thêm tài khoản mới' : 'Sửa tài khoản'}</h2>
+                <span>
+                  Nhập thông tin tài khoản, chọn vai trò và trạng thái. Phân quyền được lưu trực tiếp vào hệ thống.
+                </span>
+              </div>
+              <button
+                className="secondaryButton"
+                type="button"
+                onClick={() => {
+                  setAdminFormOpen(false);
+                  setAdminForm(emptyAdminAccountForm);
+                }}
+              >
+                Đóng
+              </button>
+            </div>
+
+            <form className="adminAccountForm" onSubmit={handleSubmitAdminAccount}>
+              <label className="field">
+                <span>Họ tên</span>
+                <input
+                  value={adminForm.fullName}
+                  onChange={(event) => setAdminForm((current) => ({ ...current, fullName: event.target.value }))}
+                  placeholder="Ví dụ: Nguyen Van A"
+                />
+              </label>
+
+              <label className="field">
+                <span>Email đăng nhập</span>
+                <input
+                  value={adminForm.email}
+                  onChange={(event) => setAdminForm((current) => ({ ...current, email: event.target.value }))}
+                  placeholder="user@englishpro.local"
+                />
+              </label>
+
+              <label className="field">
+                <span>{adminForm.mode === 'create' ? 'Mật khẩu' : 'Mật khẩu mới'}</span>
+                <input
+                  type="password"
+                  value={adminForm.password}
+                  onChange={(event) => setAdminForm((current) => ({ ...current, password: event.target.value }))}
+                  placeholder={adminForm.mode === 'create' ? 'Tối thiểu 6 ký tự' : 'Bỏ trống nếu không đổi'}
+                />
+              </label>
+
+              <label className="field">
+                <span>Số điện thoại</span>
+                <input
+                  value={adminForm.phone}
+                  onChange={(event) => setAdminForm((current) => ({ ...current, phone: event.target.value }))}
+                  placeholder="Tùy chọn"
+                />
+              </label>
+
+              <label className="field">
+                <span>Giới tính</span>
+                <select
+                  value={adminForm.gender}
+                  onChange={(event) =>
+                    setAdminForm((current) => ({ ...current, gender: event.target.value as AdminAccountForm['gender'] }))
+                  }
+                >
+                  <option value="">Chưa cập nhật</option>
+                  <option value="Nam">Nam</option>
+                  <option value="Nu">Nữ</option>
+                  <option value="Khac">Khác</option>
+                </select>
+              </label>
+
+              <label className="field">
+                <span>Trạng thái</span>
+                <select
+                  value={adminForm.status}
+                  onChange={(event) =>
+                    setAdminForm((current) => ({ ...current, status: event.target.value as AdminAccount['status'] }))
+                  }
+                >
+                  <option value="HoatDong">Hoạt động</option>
+                  <option value="BiKhoa">Bị khóa</option>
+                  <option value="NgungHoatDong">Ngừng hoạt động</option>
+                </select>
+              </label>
+
+              <div className="adminAccountFormRoles">
+                <span>Vai trò</span>
+                <div className="adminRoleToggleGrid">
+                  {adminAssignableRoles.map((role) => {
+                    const enabled = adminForm.roles.includes(role);
+                    const selfAdminRemoval = adminForm.id === session.user.id && role === USER_ROLES.ADMIN && enabled;
+                    return (
+                      <button
+                        className={`adminRoleToggle ${enabled ? 'active' : ''}`}
+                        type="button"
+                        key={`form:${role}`}
+                        onClick={() => toggleAdminFormRole(role)}
+                        disabled={selfAdminRemoval}
+                        aria-pressed={enabled}
+                      >
+                        {formatRoleLabel(role)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="adminAccountFormActions">
+                <button className="primaryButton" type="submit" disabled={adminFormBusy}>
+                  {adminFormBusy ? 'Đang lưu...' : adminForm.mode === 'create' ? 'Tạo tài khoản' : 'Lưu thay đổi'}
+                  <ShieldCheck size={16} />
+                </button>
+              </div>
+            </form>
+          </section>
+        ) : null}
+
         <section className="adminUserWorkspace">
           <div className="adminAccountList">
             {visibleAdminAccounts.map((account) => {
@@ -628,22 +1007,6 @@ export default function StudentsPage() {
                       {account.roles.length} vai trò
                     </span>
                     <span>
-                      <Target size={14} />
-                      {account.totalPoints} điểm
-                    </span>
-                    <span>
-                      <TrendingUp size={14} />
-                      {Math.round(Number(account.avgProgress ?? 0))}% tiến độ
-                    </span>
-                    <span>
-                      <BookOpen size={14} />
-                      {account.activeLessons} bài đang học
-                    </span>
-                    <span>
-                      <ShieldAlert size={14} />
-                      {account.lockedLessons} bài bị khóa
-                    </span>
-                    <span>
                       <Clock3 size={14} />
                       Cập nhật {formatRecentDate(account.updatedAt)}
                     </span>
@@ -664,7 +1027,39 @@ export default function StudentsPage() {
                     </span>
                   </div>
 
+                  <div className="adminAccountRoleEditor" aria-label={`Phân quyền ${account.fullName}`}>
+                    <span>Phân quyền</span>
+                    <div className="adminRoleToggleGrid">
+                      {adminAssignableRoles.map((role) => {
+                        const enabled = account.roles.includes(role);
+                        const isSelfAdminRemoval = account.id === session.user.id && role === USER_ROLES.ADMIN && enabled;
+                        return (
+                          <button
+                            className={`adminRoleToggle ${enabled ? 'active' : ''}`}
+                            type="button"
+                            key={`${account.id}:${role}`}
+                            disabled={adminRoleBusyAccountId === account.id || isSelfAdminRemoval}
+                            onClick={() => void handleToggleAdminRole(account, role)}
+                            aria-pressed={enabled}
+                            title={isSelfAdminRemoval ? 'Không thể tự gỡ quyền quản trị viên' : undefined}
+                          >
+                            {formatRoleLabel(role)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <div className="adminAccountActions">
+                    <button
+                      className="secondaryButton"
+                      type="button"
+                      onClick={() => openEditAdminAccountForm(account)}
+                      disabled={adminFormBusy}
+                    >
+                      Sửa tài khoản
+                      <ShieldCheck size={16} />
+                    </button>
                     {canLock ? (
                       <button
                         className="secondaryButton"
@@ -687,6 +1082,15 @@ export default function StudentsPage() {
                         <UserCheck size={16} />
                       </button>
                     ) : null}
+                    <button
+                      className="dangerButton"
+                      type="button"
+                      disabled={adminDeleteBusyAccountId === account.id || account.id === session.user.id}
+                      onClick={() => void handleDeleteAdminAccount(account)}
+                    >
+                      Xóa tài khoản
+                      <UserX size={16} />
+                    </button>
                   </div>
                 </article>
               );
@@ -703,30 +1107,54 @@ export default function StudentsPage() {
 
           <aside className="adminAccountInsights">
             <div className="roleOverviewIntro">
-              <p className="eyebrow">Sức khỏe hệ thống</p>
-              <h3>Nhìn nhanh trạng thái vận hành</h3>
+              <p className="eyebrow">Ma trận quyền actor</p>
+              <h3>Đối chiếu quyền trước khi can thiệp tài khoản</h3>
               <p>
-                Bảng điều khiển này giúp quản trị viên quét toàn cục trước khi can thiệp vào tài khoản cụ thể.
+                UC này tập trung vào quyền truy cập. Các dữ liệu học tập chi tiết nằm ở UC giám sát riêng.
               </p>
             </div>
 
             <div className="roleOverviewStack">
               <div className="roleOverviewItem">
-                <ShieldCheck size={16} />
-                <span>{adminSummary.activeAccounts} tài khoản hoạt động ổn định.</span>
+                <GraduationCap size={16} />
+                <span>Học viên: học từ vựng, ngữ pháp, thi thử TOEIC và xem tiến trình cá nhân.</span>
               </div>
               <div className="roleOverviewItem">
-                <ShieldAlert size={16} />
-                <span>{adminSummary.lockedAccounts} tài khoản đang bị khóa để chờ xử lý.</span>
-              </div>
-              <div className="roleOverviewItem">
-                <Clock3 size={16} />
-                <span>{adminSummary.suspendedAccounts} tài khoản đang ở trạng thái ngừng hoạt động.</span>
+                <Users size={16} />
+                <span>Phụ huynh: xem audit của con, kết quả học tập, cảnh báo và nhắc nhở.</span>
               </div>
               <div className="roleOverviewItem">
                 <BookOpen size={16} />
-                <span>{adminSummary.adminCount} quản trị viên đang được cấp quyền.</span>
+                <span>Giáo viên: quản lý chủ đề, ngữ pháp, đề luyện TOEIC và cảnh báo học viên.</span>
               </div>
+              <div className="roleOverviewItem">
+                <ShieldCheck size={16} />
+                <span>Admin: quản lý tài khoản, kiểm duyệt nội dung, giám sát dữ liệu và cấu hình hệ thống.</span>
+              </div>
+            </div>
+
+            <div className="roleOverviewIntro adminAuditIntro">
+              <p className="eyebrow">Audit tài khoản</p>
+              <h3>Nhật ký thao tác gần đây</h3>
+              <p>Tạo, sửa, xóa, khóa/mở và phân quyền đều được ghi lại để quản trị viên truy vết.</p>
+            </div>
+
+            <div className="adminAccountAuditList">
+              {adminAuditLogs.slice(0, 8).map((log) => (
+                <article className="adminAccountAuditItem" key={log.id}>
+                  <strong>{formatAdminAuditAction(log.action)}</strong>
+                  <span>{log.description ?? 'Không có mô tả.'}</span>
+                  <em>
+                    {log.actorName ?? 'Hệ thống'} • {formatRecentDate(log.createdAt)}
+                  </em>
+                </article>
+              ))}
+              {!adminAuditLogs.length ? (
+                <div className="emptyState compact">
+                  <ShieldCheck size={24} />
+                  <p>Chưa có nhật ký tài khoản.</p>
+                </div>
+              ) : null}
             </div>
           </aside>
         </section>
@@ -1430,6 +1858,18 @@ function formatAccountStatus(status: AdminAccount['status']) {
   };
 
   return labels[status] ?? status;
+}
+
+function formatAdminAuditAction(action: string) {
+  const labels: Record<string, string> = {
+    TAO_TAI_KHOAN: 'Tạo tài khoản',
+    SUA_TAI_KHOAN: 'Sửa tài khoản',
+    XOA_TAI_KHOAN: 'Xóa tài khoản',
+    PHAN_QUYEN_TAI_KHOAN: 'Phân quyền',
+    CAP_NHAT_TRANG_THAI_TAI_KHOAN: 'Cập nhật trạng thái',
+  };
+
+  return labels[action] ?? action;
 }
 
 function formatRecentDate(value: string | null | undefined) {

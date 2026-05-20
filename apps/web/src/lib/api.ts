@@ -79,6 +79,13 @@ export function apiPatch<T>(path: string, body: unknown, token?: string | null):
   });
 }
 
+export function apiDelete<T>(path: string, token?: string | null): Promise<T> {
+  return apiFetch<T>(path, {
+    method: 'DELETE',
+    token,
+  });
+}
+
 export function apiPostForm<T>(path: string, body: FormData, token?: string | null): Promise<T> {
   return apiFetch<T>(path, {
     method: 'POST',

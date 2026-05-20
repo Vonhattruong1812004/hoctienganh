@@ -1,8 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../database/prisma.service';
-import type { AuthUser } from '../auth/auth.types';
+import type { AuthRole, AuthUser } from '../auth/auth.types';
+import { CreateAdminAccountDto } from './dto/create-admin-account.dto';
 import { CreateStudentSupportDto } from './dto/create-student-support.dto';
+import { UpdateAdminAccountDto } from './dto/update-admin-account.dto';
 import { UpdateStudentSupportStatusDto } from './dto/update-student-support-status.dto';
+import { UpdateUserRolesDto } from './dto/update-user-roles.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 
 type FocusLessonRow = {
@@ -53,6 +57,16 @@ type AdminAccountRow = {
   publishedPaths: number;
   publishedLessons: number;
   publishedQuizzes: number;
+};
+
+type AdminAccountAuditRow = {
+  id: string;
+  actorName: string | null;
+  actorEmail: string | null;
+  action: string;
+  description: string | null;
+  targetId: string | null;
+  createdAt: string;
 };
 
 @Injectable()
@@ -301,6 +315,94 @@ export class UsersService {
     `;
   }
 
+  async getAdminAccountAudit() {
+    return this.prisma.$queryRaw<AdminAccountAuditRow[]>`
+      SELECT
+        nk."maNhatKy" AS id,
+        nd."hoTen" AS "actorName",
+        nd.email AS "actorEmail",
+        nk."hanhDong" AS action,
+        nk."moTa" AS description,
+        nk."maDoiTuong"::text AS "targetId",
+        nk."thoiGian" AS "createdAt"
+      FROM nhatkyhoatdong nk
+      LEFT JOIN nguoidung nd ON nd."maNguoiDung" = nk."maNguoiDung"
+      WHERE nk."loaiDoiTuong" = 'NguoiDung'
+      ORDER BY nk."thoiGian" DESC
+      LIMIT 20
+    `;
+  }
+
+  async createAdminAccount(dto: CreateAdminAccountDto, currentUser: AuthUser) {
+    const fullName = dto.fullName.trim();
+    const email = dto.email.trim().toLowerCase();
+    const phone = dto.phone?.trim() || null;
+    const roles = Array.from(new Set(dto.roles));
+
+    await this.ensureUniqueAccountIdentity(email, phone);
+
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const [created] = await this.prisma.$queryRaw<{ id: string }[]>`
+      INSERT INTO nguoidung (
+        "hoTen", email, "soDienThoai", "matKhau", "gioiTinh", "trangThai", "ngayTao", "ngayCapNhat"
+      )
+      VALUES (
+        ${fullName}, ${email}, ${phone}, ${passwordHash}, ${dto.gender ?? null}, ${dto.status ?? 'HoatDong'}, NOW(), NOW()
+      )
+      RETURNING "maNguoiDung" AS id
+    `;
+
+    await this.replaceUserRoles(created.id, roles);
+
+    if (roles.includes('HocVien')) {
+      await this.prisma.$executeRaw`
+        INSERT INTO hosohocvien ("maNguoiDung", "trinhDoHienTai", "mucTieuHocTap", "ngayBatDauHoc")
+        VALUES (${created.id}::uuid, 'TOEIC Starter', 'Học TOEIC theo chủ đề và luyện đề mô phỏng.', NOW())
+        ON CONFLICT ("maNguoiDung") DO NOTHING
+      `;
+    }
+
+    await this.writeUserAudit(currentUser.id, 'TAO_TAI_KHOAN', created.id, `Tạo tài khoản ${fullName} với vai trò ${roles.join(', ')}.`);
+    return this.findAdminAccountById(created.id);
+  }
+
+  async updateAdminAccount(userId: string, dto: UpdateAdminAccountDto, currentUser: AuthUser) {
+    await this.ensureAccountExists(userId);
+
+    const fullName = dto.fullName?.trim();
+    const email = dto.email?.trim().toLowerCase();
+    const phone = dto.phone === undefined ? undefined : dto.phone?.trim() || null;
+    const passwordHash = dto.password ? await bcrypt.hash(dto.password, 10) : undefined;
+
+    if (email || phone !== undefined) {
+      await this.ensureUniqueAccountIdentity(email, phone, userId);
+    }
+
+    if (currentUser.id === userId && dto.status && dto.status !== 'HoatDong') {
+      throw new BadRequestException('Không thể tự khóa hoặc tự ngừng hoạt động tài khoản đang đăng nhập.');
+    }
+
+    if (dto.status && dto.status !== 'HoatDong') {
+      await this.ensureActiveAdminWillRemain(userId, 'Không thể khóa hoặc ngừng hoạt động quản trị viên cuối cùng.');
+    }
+
+    await this.prisma.$executeRaw`
+      UPDATE nguoidung
+      SET
+        "hoTen" = COALESCE(${fullName ?? null}, "hoTen"),
+        email = COALESCE(${email ?? null}, email),
+        "soDienThoai" = CASE WHEN ${phone === undefined} THEN "soDienThoai" ELSE ${phone ?? null} END,
+        "matKhau" = COALESCE(${passwordHash ?? null}, "matKhau"),
+        "gioiTinh" = CASE WHEN ${dto.gender === undefined} THEN "gioiTinh" ELSE ${dto.gender ?? null} END,
+        "trangThai" = COALESCE(${dto.status ?? null}, "trangThai"),
+        "ngayCapNhat" = NOW()
+      WHERE "maNguoiDung" = ${userId}::uuid
+    `;
+
+    await this.writeUserAudit(currentUser.id, 'SUA_TAI_KHOAN', userId, `Cập nhật thông tin tài khoản ${userId}.`);
+    return this.findAdminAccountById(userId);
+  }
+
   async getStudentSupportSuggestions() {
     return this.prisma.$queryRaw<SupportSuggestionRow[]>`
       SELECT
@@ -439,11 +541,22 @@ export class UsersService {
       throw new NotFoundException('Không tìm thấy tài khoản cần cập nhật.');
     }
 
+    if (dto.status !== 'HoatDong') {
+      await this.ensureActiveAdminWillRemain(userId, 'Không thể khóa hoặc ngừng hoạt động quản trị viên cuối cùng.');
+    }
+
     await this.prisma.$executeRaw`
       UPDATE nguoidung
       SET "trangThai" = ${dto.status}, "ngayCapNhat" = NOW()
       WHERE "maNguoiDung" = ${userId}::uuid
     `;
+
+    await this.writeUserAudit(
+      currentUser.id,
+      'CAP_NHAT_TRANG_THAI_TAI_KHOAN',
+      userId,
+      `Cập nhật trạng thái tài khoản ${userId} thành ${dto.status}.`,
+    );
 
     const [updated] = await this.prisma.$queryRaw<AdminAccountRow[]>`
       SELECT
@@ -479,6 +592,192 @@ export class UsersService {
     `;
 
     return updated;
+  }
+
+  async updateUserRoles(userId: string, dto: UpdateUserRolesDto, currentUser: AuthUser) {
+    const roles = Array.from(new Set(dto.roles));
+
+    if (!roles.length) {
+      throw new BadRequestException('Tài khoản phải có ít nhất một vai trò.');
+    }
+
+    if (currentUser.id === userId && !roles.includes('QuanTriVien')) {
+      throw new BadRequestException('Không thể tự gỡ quyền quản trị viên của tài khoản đang đăng nhập.');
+    }
+
+    const [existing] = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT "maNguoiDung" AS id
+      FROM nguoidung
+      WHERE "maNguoiDung" = ${userId}::uuid
+      LIMIT 1
+    `;
+
+    if (!existing) {
+      throw new NotFoundException('Không tìm thấy tài khoản cần phân quyền.');
+    }
+
+    if (!roles.includes('QuanTriVien')) {
+      await this.ensureActiveAdminWillRemain(userId, 'Không thể gỡ quyền quản trị viên cuối cùng.');
+    }
+
+    await this.replaceUserRoles(userId, roles);
+
+    if (roles.includes('HocVien')) {
+      await this.prisma.$executeRaw`
+        INSERT INTO hosohocvien ("maNguoiDung", "trinhDoHienTai", "mucTieuHocTap", "ngayBatDauHoc")
+        VALUES (${userId}::uuid, 'TOEIC Starter', 'Học TOEIC theo chủ đề và luyện đề mô phỏng.', NOW())
+        ON CONFLICT ("maNguoiDung") DO NOTHING
+      `;
+    }
+
+    await this.writeUserAudit(currentUser.id, 'PHAN_QUYEN_TAI_KHOAN', userId, `Cập nhật vai trò: ${roles.join(', ')}.`);
+    const updated = await this.findAdminAccountById(userId);
+
+    return updated;
+  }
+
+  async deleteAdminAccount(userId: string, currentUser: AuthUser) {
+    if (currentUser.id === userId) {
+      throw new BadRequestException('Không thể tự xóa tài khoản đang đăng nhập.');
+    }
+
+    const existing = await this.ensureAccountExists(userId);
+
+    await this.ensureActiveAdminWillRemain(userId, 'Không thể xóa quản trị viên cuối cùng.');
+
+    await this.writeUserAudit(
+      currentUser.id,
+      'XOA_TAI_KHOAN',
+      userId,
+      `Xóa tài khoản ${existing.fullName} (${existing.email}).`,
+    );
+
+    await this.prisma.$executeRaw`
+      DELETE FROM nguoidung
+      WHERE "maNguoiDung" = ${userId}::uuid
+    `;
+
+    return { id: userId, deleted: true };
+  }
+
+  private async ensureUniqueAccountIdentity(email?: string | null, phone?: string | null, exceptUserId?: string) {
+    if (!email && !phone) return;
+
+    const duplicates = await this.prisma.$queryRaw<Array<{ id: string; email: string; phone: string | null }>>`
+      SELECT "maNguoiDung" AS id, email, "soDienThoai" AS phone
+      FROM nguoidung
+      WHERE (${email ?? null} IS NOT NULL AND email = ${email ?? null})
+         OR (${phone ?? null} IS NOT NULL AND "soDienThoai" = ${phone ?? null})
+    `;
+
+    const duplicate = duplicates.find((item) => item.id !== exceptUserId);
+    if (!duplicate) return;
+
+    if (email && duplicate.email === email) {
+      throw new BadRequestException('Email này đã được dùng cho tài khoản khác.');
+    }
+
+    throw new BadRequestException('Số điện thoại này đã được dùng cho tài khoản khác.');
+  }
+
+  private async ensureAccountExists(userId: string) {
+    const [existing] = await this.prisma.$queryRaw<Array<{ id: string; fullName: string; email: string }>>`
+      SELECT "maNguoiDung" AS id, "hoTen" AS "fullName", email
+      FROM nguoidung
+      WHERE "maNguoiDung" = ${userId}::uuid
+      LIMIT 1
+    `;
+
+    if (!existing) {
+      throw new NotFoundException('Không tìm thấy tài khoản cần xử lý.');
+    }
+
+    return existing;
+  }
+
+  private async replaceUserRoles(userId: string, roles: AuthRole[]) {
+    const normalizedRoles = Array.from(new Set(roles));
+
+    if (!normalizedRoles.length) {
+      throw new BadRequestException('Tài khoản phải có ít nhất một vai trò.');
+    }
+
+    const availableRoles = await this.prisma.$queryRaw<Array<{ id: string; role: AuthRole }>>`
+      SELECT "maVaiTro" AS id, "tenVaiTro" AS role
+      FROM vaitro
+      WHERE "tenVaiTro" = ANY(${normalizedRoles}::text[])
+    `;
+
+    if (availableRoles.length !== normalizedRoles.length) {
+      throw new BadRequestException('Danh sách vai trò không hợp lệ.');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        DELETE FROM nguoidung_vaitro
+        WHERE "maNguoiDung" = ${userId}::uuid
+      `;
+
+      for (const role of availableRoles) {
+        await tx.$executeRaw`
+          INSERT INTO nguoidung_vaitro ("maNguoiDung", "maVaiTro")
+          VALUES (${userId}::uuid, ${role.id}::uuid)
+          ON CONFLICT ("maNguoiDung", "maVaiTro") DO NOTHING
+        `;
+      }
+
+      await tx.$executeRaw`
+        UPDATE nguoidung
+        SET "ngayCapNhat" = NOW()
+        WHERE "maNguoiDung" = ${userId}::uuid
+      `;
+    });
+  }
+
+  private async ensureActiveAdminWillRemain(targetUserId: string, message: string) {
+    const [target] = await this.prisma.$queryRaw<Array<{ isActiveAdmin: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1
+        FROM nguoidung nd
+        JOIN nguoidung_vaitro ndvt ON ndvt."maNguoiDung" = nd."maNguoiDung"
+        JOIN vaitro vt ON vt."maVaiTro" = ndvt."maVaiTro"
+        WHERE nd."maNguoiDung" = ${targetUserId}::uuid
+          AND nd."trangThai" = 'HoatDong'
+          AND vt."tenVaiTro" = 'QuanTriVien'
+      ) AS "isActiveAdmin"
+    `;
+
+    if (!target?.isActiveAdmin) return;
+
+    const [remaining] = await this.prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(DISTINCT nd."maNguoiDung")::bigint AS count
+      FROM nguoidung nd
+      JOIN nguoidung_vaitro ndvt ON ndvt."maNguoiDung" = nd."maNguoiDung"
+      JOIN vaitro vt ON vt."maVaiTro" = ndvt."maVaiTro"
+      WHERE nd."maNguoiDung" <> ${targetUserId}::uuid
+        AND nd."trangThai" = 'HoatDong'
+        AND vt."tenVaiTro" = 'QuanTriVien'
+    `;
+
+    if (Number(remaining?.count ?? 0) < 1) {
+      throw new BadRequestException(message);
+    }
+  }
+
+  private async findAdminAccountById(userId: string) {
+    const accounts = await this.getAdminAccounts();
+    const account = accounts.find((item) => item.id === userId);
+    if (!account) {
+      throw new NotFoundException('Không tìm thấy tài khoản sau khi cập nhật.');
+    }
+    return account;
+  }
+
+  private async writeUserAudit(actorId: string, action: string, targetId: string, description: string) {
+    await this.prisma.$executeRaw`
+      INSERT INTO nhatkyhoatdong ("maNguoiDung", "hanhDong", "loaiDoiTuong", "maDoiTuong", "moTa")
+      VALUES (${actorId}::uuid, ${action}, 'NguoiDung', ${targetId}::uuid, ${description})
+    `;
   }
 
   private async findLessonById(lessonId: string) {

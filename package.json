@@ -8,8 +8,11 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev:api & npm run dev:web & wait",
+    "dev": "npm run free:ports && node scripts/dev.mjs",
+    "free:ports": "node scripts/free-dev-ports.mjs 4000 4100",
+    "predev:web": "node scripts/free-dev-ports.mjs 4000",
     "dev:web": "npm run dev -w apps/web",
+    "predev:api": "node scripts/free-dev-ports.mjs 4100",
     "dev:api": "npm run start:dev -w apps/api",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",

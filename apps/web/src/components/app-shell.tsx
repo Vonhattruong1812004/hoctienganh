@@ -2,12 +2,14 @@
 
 import {
   Activity,
+  Bell,
   BookOpen,
   ChartNoAxesCombined,
   CheckCircle2,
   GraduationCap,
   LibraryBig,
   LogOut,
+  ScanSearch,
   Settings,
   ShieldCheck,
   Users,
@@ -20,7 +22,19 @@ import { ThemeToggleButton } from './theme-toggle';
 
 type AppShellProps = {
   session: WebAuthSession;
-  active: 'dashboard' | 'admin' | 'paths' | 'lessons' | 'quizzes' | 'progress' | 'students' | 'playground';
+  active:
+    | 'dashboard'
+    | 'admin'
+    | 'paths'
+    | 'lessons'
+    | 'quizzes'
+    | 'progress'
+    | 'students'
+    | 'playground'
+    | 'parentAudit'
+    | 'parentResults'
+    | 'parentSupport'
+    | 'parentNotifications';
   roleContext?: UserRole;
   showSidebar?: boolean;
   eyebrow: string;
@@ -48,30 +62,26 @@ const roleLabels: Record<UserRole, string> = {
 
 const actorNavItems: Record<UserRole, NavItem[]> = {
   [USER_ROLES.STUDENT]: [
-    { key: 'lessons', href: '/lessons', label: 'UC1 Học từ vựng theo chủ đề', icon: BookOpen },
-    { key: 'progress', href: '/progress', label: 'UC2 Theo dõi tiến trình học tập', icon: ChartNoAxesCombined },
+    { key: 'lessons', href: '/lessons', label: 'Học từ vựng theo chủ đề', icon: BookOpen },
+    { key: 'progress', href: '/progress', label: 'Theo dõi tiến trình học tập', icon: ChartNoAxesCombined },
   ],
   [USER_ROLES.PARENT]: [
-    { key: 'students', href: '/students', label: 'UC1 Xem học viên liên kết', icon: Users },
-    { key: 'progress', href: '/progress', label: 'UC2 Theo dõi tiến trình con', icon: ChartNoAxesCombined },
-    { key: 'quizzes', href: '/quizzes', label: 'UC3 Xem kết quả kiểm tra', icon: CheckCircle2 },
-    { key: 'dashboard', href: '/parent/support', label: 'UC4 Cảnh báo và gợi ý ôn tập', icon: ShieldCheck },
-    { key: 'dashboard', href: '/parent/notifications', label: 'UC5 Thông báo học tập', icon: Activity },
+    { key: 'parentAudit', href: '/parent/audit', label: 'Theo dõi hồ sơ học tập của con', icon: ScanSearch },
+    { key: 'parentResults', href: '/parent/results', label: 'Xem kết quả học tập và thi thử', icon: CheckCircle2 },
+    { key: 'parentSupport', href: '/parent/support', label: 'Nhận cảnh báo và gợi ý ôn tập', icon: ShieldCheck },
+    { key: 'parentNotifications', href: '/parent/notifications', label: 'Nhắc nhở và tương tác học tập', icon: Bell },
   ],
   [USER_ROLES.TEACHER]: [
-    { key: 'paths', href: '/learning-paths', label: 'UC1 Quản lý lộ trình', icon: BookOpen },
-    { key: 'lessons', href: '/lessons', label: 'UC2 Quản lý bài học', icon: LibraryBig },
-    { key: 'quizzes', href: '/quizzes', label: 'UC3 Quản lý quiz', icon: CheckCircle2 },
-    { key: 'students', href: '/students', label: 'UC4 Theo dõi học viên', icon: Users },
-    { key: 'progress', href: '/progress', label: 'UC5 Xem tiến trình chi tiết', icon: ChartNoAxesCombined },
+    { key: 'lessons', href: '/lessons', label: 'Quản lý chủ đề từ vựng TOEIC', icon: BookOpen },
+    { key: 'paths', href: '/grammar', label: 'Quản lý ngữ pháp TOEIC', icon: LibraryBig },
+    { key: 'quizzes', href: '/toeic-practice', label: 'Quản lý đề luyện TOEIC', icon: CheckCircle2 },
+    { key: 'progress', href: '/progress', label: 'Audit học tập và cảnh báo', icon: ChartNoAxesCombined },
   ],
   [USER_ROLES.ADMIN]: [
-    { key: 'students', href: '/admin/users', label: 'Quản lý người dùng', icon: Users },
+    { key: 'students', href: '/admin/users', label: 'Quản lý tài khoản và phân quyền', icon: Users },
+    { key: 'paths', href: '/admin/content', label: 'Kiểm duyệt kho nội dung TOEIC', icon: LibraryBig },
     { key: 'progress', href: '/admin/progress', label: 'Giám sát dữ liệu học tập', icon: ChartNoAxesCombined },
-    { key: 'paths', href: '/admin/learning-paths', label: 'Quản lý lộ trình công bố', icon: BookOpen },
-    { key: 'lessons', href: '/admin/lessons', label: 'Quản lý bài học công bố', icon: LibraryBig },
-    { key: 'quizzes', href: '/admin/quizzes', label: 'Quản lý quiz công bố', icon: CheckCircle2 },
-    { key: 'admin', href: '/admin', label: 'Cấu hình và nhật ký hệ thống', icon: Settings },
+    { key: 'admin', href: '/admin', label: 'Cấu hình, tích hợp và nhật ký', icon: Settings },
   ],
 };
 

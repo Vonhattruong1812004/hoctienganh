@@ -9,6 +9,21 @@ import { etsFullPartIds, getEtsDurationMinutes, getEtsPartsByIds, getEtsQuestion
 import { clearStoredSession, getStoredSession, type WebAuthSession } from '../../lib/session';
 import { etsPracticeParts, etsPracticeTests } from '../../lib/ets-practice-library';
 
+type TeacherToeicStoreSnapshot = {
+  overrides?: Record<
+    string,
+    {
+      title?: string;
+      description?: string;
+      type?: 'LR' | 'SW';
+      status?: 'Nhap' | 'SanSang' | 'TamAn';
+    }
+  >;
+  deletedIds?: string[];
+};
+
+const TEACHER_TOEIC_STORE_KEY = 'englishpro:teacher-toeic-test-manager:v1';
+
 const speakingWritingParts = [
   { id: 'sw-1', label: 'Speaking 1-2', title: 'Read a text aloud', durationMinutes: 3, count: 2 },
   { id: 'sw-2', label: 'Speaking 3-4', title: 'Describe a picture', durationMinutes: 3, count: 2 },
@@ -20,12 +35,24 @@ const speakingWritingParts = [
   { id: 'sw-8', label: 'Writing 8', title: 'Write an opinion essay', durationMinutes: 30, count: 1 },
 ];
 
+function readTeacherToeicStore(): TeacherToeicStoreSnapshot {
+  if (typeof window === 'undefined') return {};
+  const raw = window.localStorage.getItem(TEACHER_TOEIC_STORE_KEY);
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw) as TeacherToeicStoreSnapshot;
+  } catch {
+    return {};
+  }
+}
+
 export default function EtsPracticeSetupPage() {
   const router = useRouter();
   const [session, setSession] = useState<WebAuthSession | null>(null);
   const [testNumber, setTestNumber] = useState(1);
   const [toeicType, setToeicType] = useState<EtsToeicType>('lr');
   const [selectedParts, setSelectedParts] = useState<string[]>(etsFullPartIds);
+  const [teacherToeicStore, setTeacherToeicStore] = useState<TeacherToeicStoreSnapshot>({});
 
   useEffect(() => {
     const stored = getStoredSession();
@@ -34,7 +61,35 @@ export default function EtsPracticeSetupPage() {
       return;
     }
     setSession(stored);
+    setTeacherToeicStore(readTeacherToeicStore());
   }, [router]);
+
+  const availableTests = useMemo(() => {
+    const deleted = new Set(teacherToeicStore.deletedIds ?? []);
+    return etsPracticeTests
+      .filter((test) => {
+        if (deleted.has(test.id)) return false;
+        const override = teacherToeicStore.overrides?.[test.id];
+        if (!override) return true;
+        if (override.type && override.type !== 'LR') return false;
+        return override.status === 'SanSang';
+      })
+      .map((test) => {
+        const override = teacherToeicStore.overrides?.[test.id];
+        return {
+          ...test,
+          title: override?.title ?? test.title,
+          description: override?.description ?? test.description,
+        };
+      });
+  }, [teacherToeicStore]);
+
+  useEffect(() => {
+    if (!availableTests.length) return;
+    if (!availableTests.some((test) => test.testNumber === testNumber)) {
+      setTestNumber(availableTests[0].testNumber);
+    }
+  }, [availableTests, testNumber]);
 
   const chosenParts = useMemo(() => getEtsPartsByIds(selectedParts), [selectedParts]);
   const totalQuestions = useMemo(() => getEtsQuestionList(chosenParts).length, [chosenParts]);
@@ -105,7 +160,7 @@ export default function EtsPracticeSetupPage() {
         <label>
           <span>Bộ đề</span>
           <select value={testNumber} onChange={(event) => setTestNumber(Number(event.target.value))}>
-            {etsPracticeTests.map((test) => (
+            {availableTests.map((test) => (
               <option value={test.testNumber} key={test.id}>
                 {test.title}
               </option>

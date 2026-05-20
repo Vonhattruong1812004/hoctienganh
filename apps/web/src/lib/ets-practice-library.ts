@@ -78,7 +78,8 @@ export const etsPracticeParts: EtsPracticePart[] = [
     from: 101,
     to: 130,
     durationMinutes: 12,
-    direction: 'Làm câu ngữ pháp/từ vựng ngắn trong PDF RC.',
+    direction:
+      'Directions: A word or phrase is missing in each of the sentences below. Four answer choices are given below each sentence. Select the best answer to complete the sentence. Then mark the letter (A), (B), (C), or (D) on your answer sheet.',
     paperPageOffset: 0,
     reviewFocus: 'Từ loại, thì, bị động, giới từ, liên từ, mệnh đề và cấu trúc câu công sở.',
   },
@@ -90,7 +91,8 @@ export const etsPracticeParts: EtsPracticePart[] = [
     from: 131,
     to: 146,
     durationMinutes: 10,
-    direction: 'Hoàn thành đoạn văn trong PDF RC.',
+    direction:
+      'Directions: Read the texts that follow. A word, phrase, or sentence is missing in parts of each text. Four answer choices for each question are given below the text. Select the best answer to complete the text. Then mark the letter (A), (B), (C), or (D) on your answer sheet.',
     paperPageOffset: 7,
     reviewFocus: 'Liên kết đoạn văn, đại từ tham chiếu, từ nối, thì và câu chèn logic.',
   },
@@ -102,7 +104,8 @@ export const etsPracticeParts: EtsPracticePart[] = [
     from: 147,
     to: 200,
     durationMinutes: 53,
-    direction: 'Đọc hiểu single/multiple passages trong PDF RC.',
+    direction:
+      'Directions: In this part, you will read a selection of texts, such as magazine and newspaper articles, e-mails, and instant messages. Each text or set of texts is followed by several questions. Select the best answer for each question and mark the letter (A), (B), (C), or (D) on your answer sheet.',
     paperPageOffset: 12,
     reviewFocus: 'Scanning keyword, câu hỏi chi tiết, suy luận, mục đích văn bản và nối thông tin nhiều đoạn.',
   },
@@ -279,6 +282,84 @@ export function etsPart4QuestionGroupImageAssets(testNumber: number) {
     questions: questionNumbers(from, to),
     alt: `ETS 2026 Test ${safeTestNumber} Part 4 câu ${from}-${to}`,
     url: `/ets/part4/test-${String(safeTestNumber).padStart(2, '0')}/q-${String(from).padStart(2, '0')}-${String(to).padStart(2, '0')}.png`,
+  }));
+}
+
+export function etsPart5QuestionGroupImageAssets(testNumber: number) {
+  const safeTestNumber = Math.min(Math.max(testNumber, 1), 10);
+  const groups = [
+    [101, 104],
+    [105, 108],
+    [109, 114],
+    [115, 120],
+    [121, 125],
+    [126, 130],
+  ] as const;
+
+  return groups.map(([from, to], index) => ({
+    id: `part5-${from}-${to}`,
+    index: index + 1,
+    from,
+    to,
+    questions: questionNumbers(from, to),
+    alt: `ETS 2026 Test ${safeTestNumber} Part 5 câu ${from}-${to}`,
+    url: `/ets/part5-groups/test-${String(safeTestNumber).padStart(2, '0')}/q-${String(from).padStart(3, '0')}-${String(to).padStart(3, '0')}.png`,
+  }));
+}
+
+export function etsPart6QuestionGroupImageAssets(testNumber: number) {
+  const safeTestNumber = Math.min(Math.max(testNumber, 1), 10);
+  const groups = [
+    [131, 134],
+    [135, 138],
+    [139, 142],
+    [143, 146],
+  ] as const;
+
+  return groups.map(([from, to], index) => ({
+    id: `part6-${from}-${to}`,
+    index: index + 1,
+    from,
+    to,
+    questions: questionNumbers(from, to),
+    alt: `ETS 2026 Test ${safeTestNumber} Part 6 câu ${from}-${to}`,
+    url: `/ets/part6-groups/test-${String(safeTestNumber).padStart(2, '0')}/q-${String(from).padStart(3, '0')}-${String(to).padStart(3, '0')}.png`,
+  }));
+}
+
+export function etsPart7QuestionGroupImageAssets(testNumber: number) {
+  const safeTestNumber = Math.min(Math.max(testNumber, 1), 10);
+  const groups = [
+    [147, 148, 1],
+    [149, 150, 1],
+    [151, 152, 1],
+    [153, 154, 1],
+    [155, 157, 1],
+    [158, 160, 1],
+    [161, 163, 1],
+    [164, 167, 1],
+    [168, 171, 1],
+    [172, 175, 2],
+    [176, 180, 2],
+    [181, 185, 2],
+    [186, 190, 2],
+    [191, 195, 2],
+    [196, 200, 2],
+  ] as const;
+
+  return groups.map(([from, to, pageCount], index) => ({
+    id: `part7-${from}-${to}`,
+    index: index + 1,
+    from,
+    to,
+    questions: questionNumbers(from, to),
+    alt: `ETS 2026 Test ${safeTestNumber} Part 7 câu ${from}-${to}`,
+    images: Array.from({ length: pageCount }, (_, pageIndex) => ({
+      id: `part7-${from}-${to}-p${pageIndex + 1}`,
+      pageIndex: pageIndex + 1,
+      url: `/ets/part7-groups/test-${String(safeTestNumber).padStart(2, '0')}/q-${String(from).padStart(3, '0')}-${String(to).padStart(3, '0')}-p${pageIndex + 1}.png`,
+      alt: `ETS 2026 Test ${safeTestNumber} Part 7 câu ${from}-${to} trang ${pageIndex + 1}`,
+    })),
   }));
 }
 

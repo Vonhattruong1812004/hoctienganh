@@ -32,6 +32,7 @@ import { USER_ROLES, type UserRole } from '@english-learning/shared';
 import { AppShell } from '../../components/app-shell';
 import { ApiError, apiGet } from '../../lib/api';
 import { clearStoredSession, getStoredSession, type WebAuthSession } from '../../lib/session';
+import { topicLibrary } from '../../lib/topic-library';
 
 type Summary = {
   totalUsers: number;
@@ -194,50 +195,48 @@ type DashboardFallbackData = {
 const roleProfiles: Record<UserRole, RoleProfile> = {
   [USER_ROLES.STUDENT]: {
     label: 'Học viên',
-    summary: 'Học theo lộ trình, làm nhiệm vụ, hoàn thành quiz và mở khóa bài tiếp theo.',
-    badge: 'Trọng tâm học tập',
+    summary: 'Học TOEIC theo chủ đề, ngữ pháp, luyện Part, thi thử và xem tiến trình.',
+    badge: 'Học TOEIC',
     privateUseCases: [
-      'Xem lộ trình được công bố',
-      'Học bài, nghe audio, xem từ vựng và ngữ pháp',
-      'Làm quiz cuối bài và mở khóa bài tiếp theo',
-      'Theo dõi tiến trình cá nhân',
-      'Chơi mini game, chăm pet và dùng AI nhận diện hình ảnh',
+      'Học từ vựng TOEIC theo chủ đề kèm ảnh, audio, ví dụ và game ôn',
+      'Học ngữ pháp TOEIC theo topic, luyện câu Part 5/6',
+      'Xem cấu trúc bài thi TOEIC và mẹo làm từng Part',
+      'Ôn luyện đề mẫu TOEIC theo Part hoặc Full test',
+      'Thi thử TOEIC như bài thật và xem lời giải chi tiết',
+      'Theo dõi tiến trình, điểm mạnh/yếu và gợi ý học tiếp',
     ],
   },
   [USER_ROLES.PARENT]: {
     label: 'Phụ huynh',
-    summary: 'Theo dõi tiến độ học viên, kết quả quiz và những bài cần hỗ trợ ôn tập.',
-    badge: 'Theo dõi tiến độ',
+    summary: 'Theo dõi hồ sơ học tập, kết quả kiểm tra và những điểm cần hỗ trợ của con.',
+    badge: 'Giám sát học tập',
     privateUseCases: [
-      'Xem danh sách học viên đã liên kết',
-      'Theo dõi phần trăm hoàn thành và chuỗi ngày học',
-      'Xem cảnh báo bài chưa đạt',
-      'Nhận gợi ý hỗ trợ ôn tập cho học viên',
-      'Xem thông báo học tập của phụ huynh và học viên liên kết',
+      'Theo dõi hồ sơ học tập của con bằng audit log',
+      'Xem kết quả kiểm tra và điểm cần cải thiện',
+      'Nhận cảnh báo, gợi ý hỗ trợ ôn tập tại nhà',
+      'Theo dõi thông báo học tập của gia đình',
     ],
   },
   [USER_ROLES.TEACHER]: {
     label: 'Giáo viên',
-    summary: 'Quản lý nội dung học, tổ chức quiz và theo dõi chất lượng học tập.',
-    badge: 'Quản lý nội dung',
+    summary: 'Điều phối nội dung TOEIC, đề luyện, thi thử và hỗ trợ học viên theo dữ liệu.',
+    badge: 'Điều phối TOEIC',
     privateUseCases: [
-      'Quản lý lộ trình, giai đoạn và bài học',
-      'Quản lý từ vựng, ngữ pháp, tài nguyên nghe/xem',
-      'Tạo và quản lý quiz, câu hỏi, đáp án',
-      'Theo dõi kết quả học tập để điều chỉnh nội dung',
-      'Theo dõi học viên cần hỗ trợ và mở tiến trình chi tiết của từng em',
+      'Quản lý kho chủ đề từ vựng TOEIC và bộ từ theo ngữ cảnh',
+      'Quản lý topic ngữ pháp TOEIC và bài luyện Part 5/6',
+      'Quản lý quiz, đề mẫu, Part luyện tập và đáp án giải thích',
+      'Audit quá trình học, kết quả thi thử TOEIC và cảnh báo học viên cần hỗ trợ',
     ],
   },
   [USER_ROLES.ADMIN]: {
     label: 'Quản trị viên',
-    summary: 'Điều phối hệ thống, phân quyền, quản lý dữ liệu và giám sát vận hành.',
-    badge: 'Điều phối hệ thống',
+    summary: 'Điều phối tài khoản, phân quyền, kiểm duyệt nội dung TOEIC và vận hành hệ thống.',
+    badge: 'System governance',
     privateUseCases: [
-      'Quản lý người dùng và phân quyền actor',
+      'Quản lý tài khoản và phân quyền actor',
+      'Kiểm duyệt và công bố kho nội dung TOEIC',
       'Giám sát dữ liệu học tập toàn hệ thống',
-      'Quản lý trạng thái nội dung công bố',
-      'Theo dõi nhật ký hoạt động và cấu hình hệ thống',
-      'Xem thống kê nội dung và sức khỏe vận hành của hệ thống',
+      'Cấu hình hệ thống, tích hợp và nhật ký vận hành',
     ],
   },
 };
@@ -311,98 +310,80 @@ const roleCommandItems: Record<
   ],
   [USER_ROLES.PARENT]: [
     {
-      href: '/students',
-      icon: Users,
-      label: 'Theo dõi học viên',
-      text: 'Xem học viên đã liên kết, mục tiêu học, chuỗi ngày học và tiến độ.',
+      href: '/parent/audit',
+      icon: ScanSearch,
+      label: 'Theo dõi hồ sơ học tập của con',
+      text: 'Xem audit log học tập: bài học, nhiệm vụ, quiz, game, AI Vision, thông báo và cảnh báo theo thời gian.',
     },
     {
-      href: '/progress',
-      icon: ChartNoAxesCombined,
-      label: 'Xem tiến trình con',
-      text: 'Quan sát bài đã hoàn thành, bài đang học và điểm cao nhất của học viên.',
+      href: '/parent/results',
+      icon: CheckCircle2,
+      label: 'Xem kết quả học tập và thi thử',
+      text: 'Tổng hợp điểm quiz, bài cần ôn, lượt thi thử TOEIC, độ chính xác và tiến bộ của con.',
     },
     {
       href: '/parent/support',
       icon: ShieldCheck,
-      label: 'Gợi ý hỗ trợ',
-      text: 'Nhận ngữ cảnh bài cần ôn để phụ huynh hỗ trợ học viên tại nhà.',
+      label: 'Nhận cảnh báo và gợi ý ôn tập',
+      text: 'Xem bài cần ôn, lý do cảnh báo, mức ưu tiên và việc phụ huynh nên làm tiếp theo.',
     },
     {
       href: '/parent/notifications',
       icon: Bell,
-      label: 'Thông báo học tập',
-      text: 'Theo dõi thông báo tiến trình, bài kiểm tra và cảnh báo của học viên.',
+      label: 'Nhắc nhở và tương tác học tập',
+      text: 'Theo dõi nhắc nhở, thông báo mới và phản hồi hỗ trợ học tập cho con.',
     },
   ],
   [USER_ROLES.TEACHER]: [
     {
-      href: '/learning-paths',
-      icon: BookOpen,
-      label: 'Quản lý lộ trình',
-      text: 'Xem cấu trúc lộ trình, giai đoạn và nền tảng để mở rộng CRUD nội dung.',
-    },
-    {
       href: '/lessons',
+      icon: BookOpen,
+      label: 'Quản lý chủ đề từ vựng TOEIC',
+      text: 'Thêm, sửa, xóa chủ đề và bộ từ vựng; dùng AI hỗ trợ chuẩn hóa nội dung và sinh dữ liệu theo chủ đề.',
+    },
+    {
+      href: '/grammar',
       icon: LibraryBig,
-      label: 'Quản lý bài học',
-      text: 'Kiểm tra nội dung bài, task, từ vựng, ngữ pháp và tài nguyên.',
+      label: 'Quản lý ngữ pháp TOEIC',
+      text: 'Rà soát topic ngữ pháp, công thức, ví dụ, lỗi thường gặp và bài luyện Part 5/6.',
     },
     {
-      href: '/quizzes',
+      href: '/toeic-practice',
       icon: CheckCircle2,
-      label: 'Quản lý kiểm tra',
-      text: 'Xem quiz đã công bố, câu hỏi, thời lượng và điểm đạt yêu cầu.',
-    },
-    {
-      href: '/students',
-      icon: Users,
-      label: 'Theo dõi lớp học',
-      text: 'Xem danh sách học viên, tiến độ, quiz, cảnh báo cần hỗ trợ và chất lượng học tập.',
+      label: 'Quản lý đề luyện TOEIC',
+      text: 'Theo dõi đề mẫu, từng Part, thời gian làm bài, đáp án và lời giải cho học viên luyện tập.',
     },
     {
       href: '/progress',
       icon: ChartNoAxesCombined,
-      label: 'Xem tiến trình chi tiết',
-      text: 'Mở báo cáo tiến trình của một học viên để xem bài đang học và bài cần hỗ trợ.',
+      label: 'Audit học tập và cảnh báo',
+      text: 'Gộp theo dõi kết quả, audit log, cảnh báo và nhắc nhở hỗ trợ học viên trong một màn.',
     },
   ],
   [USER_ROLES.ADMIN]: [
     {
       href: '/admin/users',
       icon: Users,
-      label: 'Quản lý người dùng',
-      text: 'Tài khoản học viên, phụ huynh, giáo viên, trạng thái và phân quyền truy cập.',
+      label: 'Quản lý tài khoản và phân quyền',
+      text: 'Kiểm soát người dùng, vai trò actor, trạng thái truy cập và rủi ro phân quyền.',
+    },
+    {
+      href: '/admin/content',
+      icon: LibraryBig,
+      label: 'Kiểm duyệt kho nội dung TOEIC',
+      text: 'Gom lộ trình, chủ đề, bài học, quiz và đề luyện để duyệt trước khi công bố.',
     },
     {
       href: '/admin/progress',
       icon: ChartNoAxesCombined,
-      label: 'Giám sát học tập',
-      text: 'Theo dõi tiến độ, điểm quiz, học viên cần hỗ trợ và chất lượng vận hành.',
-    },
-    {
-      href: '/admin/learning-paths',
-      icon: BookOpen,
-      label: 'Quản lý lộ trình',
-      text: 'Duyệt lộ trình, trạng thái công bố, cấu trúc giai đoạn và độ sẵn sàng.',
-    },
-    {
-      href: '/admin/lessons',
-      icon: LibraryBig,
-      label: 'Quản lý bài học',
-      text: 'Rà soát bài học, task, từ vựng, ngữ pháp, audio, video và tài nguyên học.',
-    },
-    {
-      href: '/admin/quizzes',
-      icon: CheckCircle2,
-      label: 'Quản lý quiz',
-      text: 'Kiểm tra câu hỏi, điểm đạt, lượt làm, tỷ lệ vượt qua và trạng thái công bố.',
+      label: 'Giám sát dữ liệu học tập',
+      text: 'Theo dõi tiến độ, kết quả TOEIC, audit học tập và tín hiệu cần can thiệp.',
     },
     {
       href: '/admin',
       icon: Settings,
-      label: 'Cấu hình hệ thống',
-      text: 'Theo dõi sức khỏe API, nhật ký vận hành, cấu hình nền tảng và dữ liệu hệ thống.',
+      label: 'Cấu hình, tích hợp và nhật ký',
+      text: 'Theo dõi sức khỏe API, cấu hình nền tảng, nguồn tích hợp và log vận hành.',
     },
   ],
 };
@@ -1130,11 +1111,6 @@ export default function DashboardPage() {
     return (
       <ParentDashboard
         session={session}
-        learningPath={learningPath}
-        linkedStudents={linkedStudents}
-        reviewSuggestions={reviewSuggestions}
-        parentNotifications={parentNotifications}
-        parentReviewSummary={parentReviewSummary}
         loading={loading}
         error={error}
         dataMode={dataMode}
@@ -1300,7 +1276,7 @@ export default function DashboardPage() {
         <section className="parentReviewPanel panel" aria-label="Cảnh báo lớp học">
           <div className="sectionTitle">
             <div>
-              <p className="eyebrow">UC6 • Theo dõi lớp học</p>
+              <p className="eyebrow">Theo dõi lớp học</p>
               <h2>Học viên cần hỗ trợ và lớp đang vận hành</h2>
               <span>
                 Giáo viên nhìn nhanh ai đang chậm tiến độ, ai ổn định, và bấm vào đúng học viên để mở báo
@@ -1441,7 +1417,7 @@ export default function DashboardPage() {
         <section className="parentReviewPanel panel" aria-label="Cảnh báo và gợi ý ôn tập">
           <div className="sectionTitle">
             <div>
-              <p className="eyebrow">UC4 • Cảnh báo và gợi ý ôn tập</p>
+              <p className="eyebrow">Cảnh báo và gợi ý ôn tập</p>
               <h2>Việc phụ huynh nên hỗ trợ hôm nay</h2>
               <span>
                 Hệ thống tổng hợp từ tiến trình, điểm quiz và bảng gợi ý ôn tập để phụ huynh biết cần
@@ -1550,7 +1526,7 @@ export default function DashboardPage() {
         <section className="parentNotificationPanel panel" aria-label="Thông báo học tập">
           <div className="sectionTitle">
             <div>
-              <p className="eyebrow">UC5 • Thông báo học tập</p>
+              <p className="eyebrow">Thông báo học tập</p>
               <h2>Thông báo mới và lịch sử học tập</h2>
               <span>
                 Tổng hợp thông báo hệ thống và thông báo gắn với học viên đã liên kết để phụ huynh
@@ -2423,28 +2399,12 @@ function StudentDashboard({
 
 function ParentDashboard({
   session,
-  learningPath,
-  linkedStudents,
-  reviewSuggestions,
-  parentNotifications,
-  parentReviewSummary,
   loading,
   error,
   dataMode,
   commandItems,
 }: {
   session: WebAuthSession;
-  learningPath: LearningPathDetail | null;
-  linkedStudents: LinkedStudent[];
-  reviewSuggestions: ParentReviewSuggestion[];
-  parentNotifications: ParentNotification[];
-  parentReviewSummary: {
-    urgentCount: number;
-    newCount: number;
-    doneCount: number;
-    unreadNotifications: number;
-    averageStudentProgress: number;
-  };
   loading: boolean;
   error: string;
   dataMode: 'live' | 'demo';
@@ -2455,29 +2415,6 @@ function ParentDashboard({
     text: string;
   }>;
 }) {
-  const parentStats = [
-    {
-      label: 'Học viên',
-      value: linkedStudents.length,
-      note: 'Đã liên kết',
-    },
-    {
-      label: 'Cần hỗ trợ',
-      value: parentReviewSummary.urgentCount,
-      note: 'Ưu tiên hôm nay',
-    },
-    {
-      label: 'Chưa đọc',
-      value: parentReviewSummary.unreadNotifications,
-      note: 'Thông báo mới',
-    },
-    {
-      label: 'Tiến độ TB',
-      value: `${parentReviewSummary.averageStudentProgress}%`,
-      note: 'Toàn bộ học viên',
-    },
-  ];
-
   return (
     <AppShell
       session={session}
@@ -2491,25 +2428,7 @@ function ParentDashboard({
         <div className="adminMenuHero parentMenuHero">
           <div className="adminMenuHeroCopy">
             <p className="eyebrow">Xin chào, {session.user.fullName}</p>
-            <h2>Đồng hành học tập từ từng trang riêng</h2>
-            <p>
-              Dashboard phụ huynh chỉ giữ các cổng chức năng chính. Mỗi chức năng mở sang một màn hình nghiệp vụ
-              riêng để xem học viên, tiến trình, kết quả kiểm tra, gợi ý hỗ trợ hoặc thông báo học tập.
-            </p>
-            <div className="adminMenuChips" aria-hidden="true">
-              <span>
-                <Users size={14} />
-                {linkedStudents.length} học viên
-              </span>
-              <span>
-                <Sparkles size={14} />
-                {reviewSuggestions.length} gợi ý
-              </span>
-              <span>
-                <BookOpen size={14} />
-                {learningPath?.level ?? 'A1'} Path
-              </span>
-            </div>
+            <h2>Chọn chức năng phụ huynh</h2>
           </div>
 
           <div className="parentMenuScene" aria-hidden="true">
@@ -2529,28 +2448,11 @@ function ParentDashboard({
           </div>
         </div>
 
-        <div className="studentMenuStats parentMenuStats" aria-label="Tóm tắt phụ huynh">
-          {parentStats.map((item) => (
-            <div className="studentMenuStat parentMenuStat" key={item.label}>
-              <span>{item.label}</span>
-              <strong>{item.value}</strong>
-              <em>{item.note}</em>
-            </div>
-          ))}
-        </div>
-
         {error ? <div className="errorBox dashboardMessage">{error}</div> : null}
         {dataMode === 'demo' ? (
           <div className="subtleBox dashboardMessage">Đang hiển thị dữ liệu mẫu vì backend chưa phản hồi.</div>
         ) : null}
         {loading ? <div className="subtleBox dashboardMessage">Đang đồng bộ dữ liệu phụ huynh...</div> : null}
-
-        <div className="sectionTitle adminMenuHeading">
-          <div>
-            <h2>Chọn chức năng để mở trang riêng</h2>
-            <span>Dashboard không còn trộn học viên, cảnh báo và thông báo vào chung một màn hình.</span>
-          </div>
-        </div>
 
         <div className="adminMenuGrid parentMenuGrid">
           {commandItems.map((item, index) => {
@@ -2613,16 +2515,18 @@ function TeacherDashboard({
   const pathCount = summary?.totalPublishedPaths ?? 0;
   const lessonCount = summary?.totalPublishedLessons ?? 0;
   const quizCount = summary?.totalPublishedQuizzes ?? 0;
+  const toeicTopicCount = topicLibrary.length;
+  const toeicWordCount = topicLibrary.reduce((sum, topic) => sum + topic.vocabulary.length, 0);
   const teacherStats = [
+    {
+      label: 'Chủ đề TOEIC',
+      value: toeicTopicCount,
+      note: `${toeicWordCount} từ vựng`,
+    },
     {
       label: 'Học viên',
       value: teacherSupportSummary.totalStudents,
       note: 'Đang theo dõi',
-    },
-    {
-      label: 'Cần hỗ trợ',
-      value: teacherSupportSummary.urgentStudents.length,
-      note: 'Ưu tiên hôm nay',
     },
     {
       label: 'Tiến độ TB',
@@ -2649,23 +2553,23 @@ function TeacherDashboard({
         <div className="adminMenuHero teacherMenuHero">
           <div className="adminMenuHeroCopy">
             <p className="eyebrow">Xin chào, {session.user.fullName}</p>
-            <h2>Điều phối lớp học từ từng trang riêng</h2>
+            <h2>Điều phối học TOEIC từ từng trang riêng</h2>
             <p>
-              Dashboard giáo viên chỉ giữ các cổng nghiệp vụ chính. Khi cần quản lý lộ trình, bài học,
-              quiz, học viên hoặc tiến trình, giáo viên mở đúng trang chức năng tương ứng.
+              Dashboard giáo viên chỉ giữ các UC chính của hệ thống TOEIC: chủ đề từ vựng, ngữ pháp,
+              đề luyện, học viên, kết quả và cảnh báo học tập.
             </p>
             <div className="adminMenuChips" aria-hidden="true">
               <span>
-                <Users size={14} />
-                {teacherSupportSummary.totalStudents} học viên
+                <BookOpen size={14} />
+                {toeicTopicCount} chủ đề TOEIC
               </span>
               <span>
                 <ShieldCheck size={14} />
                 {roleProfile.badge}
               </span>
               <span>
-                <BookOpen size={14} />
-                {learningPath?.level ?? 'A1'} content
+                <Users size={14} />
+                {teacherSupportSummary.totalStudents} học viên
               </span>
             </div>
           </div>
@@ -2705,8 +2609,8 @@ function TeacherDashboard({
 
         <div className="sectionTitle adminMenuHeading">
           <div>
-            <h2>Chọn chức năng để mở trang riêng</h2>
-            <span>Dashboard không còn trộn màn lớp học, nội dung và báo cáo vào chung một trang.</span>
+            <h2>Chọn chức năng giáo viên TOEIC</h2>
+            <span>Mỗi chức năng mở sang một màn nghiệp vụ riêng, không trộn vào dashboard.</span>
           </div>
         </div>
 
@@ -2763,20 +2667,22 @@ function AdminDashboard({
         <div className="adminMenuHero">
           <div className="adminMenuHeroCopy">
             <p className="eyebrow">Xin chào, {session.user.fullName}</p>
-            <h2>Trung tâm điều phối EnglishPro</h2>
-            <p>Dashboard quản trị chỉ giữ các cổng chức năng chính, mỗi cổng mở sang một màn hình nghiệp vụ riêng.</p>
+            <h2>Trung tâm quản trị EnglishPro TOEIC</h2>
+            <p>
+              Dashboard admin chỉ giữ 4 UC cấp hệ thống: tài khoản, nội dung TOEIC, dữ liệu học tập và vận hành.
+            </p>
             <div className="adminMenuChips" aria-hidden="true">
               <span>
                 <Settings size={14} />
-                Điều phối
+                4 UC cốt lõi
               </span>
               <span>
                 <Sparkles size={14} />
-                Live content
+                TOEIC content
               </span>
               <span>
                 <ShieldCheck size={14} />
-                Quản trị viên
+                Phân quyền
               </span>
             </div>
           </div>
@@ -2813,11 +2719,9 @@ function AdminDashboard({
           </div>
         </div>
 
-        <ContentHubSpotlight compact />
-
         <div className="sectionTitle adminMenuHeading">
           <div>
-            <h2>Chọn một chức năng để mở trang riêng</h2>
+            <h2>Chọn UC quản trị</h2>
           </div>
         </div>
 

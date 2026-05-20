@@ -22,7 +22,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { USER_ROLES } from '@english-learning/shared';
 import { AppShell } from '../../components/app-shell';
-import { ApiError, apiGet } from '../../lib/api';
+import { ApiError, apiGet, apiPost } from '../../lib/api';
 import { clearStoredSession, getStoredSession, type WebAuthSession } from '../../lib/session';
 
 type ProgressRow = {
@@ -63,6 +63,44 @@ type LinkedStudent = {
   linkedParentsCount: number;
 };
 
+type TeacherAuditLog = {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentEmail: string;
+  eventGroup: string;
+  eventType: string;
+  title: string;
+  description: string;
+  targetType: string;
+  targetId: string | null;
+  status: string;
+  progress: number | null;
+  score: number | null;
+  occurredAt: string;
+};
+
+type TeacherAlert = {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentEmail: string;
+  reason: string;
+  priority: number;
+  status: string;
+  createdAt: string;
+  lessonId: string | null;
+  lessonTitle: string | null;
+  lessonProgress: number;
+  bestScore: number;
+};
+
+type TeacherLearningControlResponse = {
+  students: LinkedStudent[];
+  logs: TeacherAuditLog[];
+  alerts: TeacherAlert[];
+};
+
 const statusLabels: Record<string, string> = {
   ChuaHoc: 'Chưa học',
   DangHoc: 'Đang học',
@@ -75,6 +113,16 @@ const progressBandFilters = [
   { key: 'needs-support', label: 'Cần hỗ trợ' },
   { key: 'watch', label: 'Theo dõi' },
   { key: 'steady', label: 'Ổn định' },
+] as const;
+
+const teacherAuditFilters = [
+  { key: 'all', label: 'Tất cả' },
+  { key: 'BaiHoc', label: 'Bài học' },
+  { key: 'Quiz', label: 'Quiz' },
+  { key: 'TroChoi', label: 'Game' },
+  { key: 'AI', label: 'AI' },
+  { key: 'CanhBao', label: 'Cảnh báo' },
+  { key: 'ThongBao', label: 'Thông báo' },
 ] as const;
 
 function formatDate(value: string | null) {
@@ -110,6 +158,16 @@ function getProgressBandLabel(band: (typeof progressBandFilters)[number]['key'])
   return option?.label ?? 'Tất cả';
 }
 
+function getAuditGroupLabel(group: string) {
+  return teacherAuditFilters.find((item) => item.key === group)?.label ?? group;
+}
+
+function getPriorityLabel(priority: number) {
+  if (priority <= 1) return 'Khẩn cấp';
+  if (priority === 2) return 'Ưu tiên';
+  return 'Theo dõi';
+}
+
 export default function ProgressPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -117,10 +175,18 @@ export default function ProgressPage() {
   const [session, setSession] = useState<WebAuthSession | null>(null);
   const [progress, setProgress] = useState<ProgressRow[]>([]);
   const [linkedStudents, setLinkedStudents] = useState<LinkedStudent[]>([]);
+  const [teacherAuditLogs, setTeacherAuditLogs] = useState<TeacherAuditLog[]>([]);
+  const [teacherAlerts, setTeacherAlerts] = useState<TeacherAlert[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [progressSearch, setProgressSearch] = useState('');
+  const [teacherAuditFilter, setTeacherAuditFilter] =
+    useState<(typeof teacherAuditFilters)[number]['key']>('all');
   const [progressBandFilter, setProgressBandFilter] =
     useState<(typeof progressBandFilters)[number]['key']>('all');
+  const [supportFeedback, setSupportFeedback] = useState('');
+  const [supportPriority, setSupportPriority] = useState(1);
+  const [supportBusy, setSupportBusy] = useState(false);
+  const [supportMessage, setSupportMessage] = useState('');
   const [loadingLinkedStudents, setLoadingLinkedStudents] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState(true);
   const [error, setError] = useState('');
@@ -157,6 +223,30 @@ export default function ProgressPage() {
     async function load() {
       try {
         if (canSelectStudent) {
+          const isTeacherControlMode =
+            currentSession.user.roles.includes(USER_ROLES.TEACHER) &&
+            !currentSession.user.roles.includes(USER_ROLES.ADMIN);
+
+          if (isTeacherControlMode) {
+            const response = await apiGet<TeacherLearningControlResponse>(
+              '/progress/teacher/learning-control',
+              currentSession.accessToken,
+            );
+            if (!active) return;
+            setError('');
+            setLinkedStudents(response.students);
+            setTeacherAuditLogs(response.logs);
+            setTeacherAlerts(response.alerts);
+            setSelectedStudentId((currentSelected) =>
+              response.students.some((student) => student.id === requestedStudentId)
+                ? requestedStudentId
+                : response.students.some((student) => student.id === currentSelected)
+                  ? currentSelected
+                  : response.students[0]?.id ?? '',
+            );
+            return;
+          }
+
           const endpoint = currentSession.user.roles.includes(USER_ROLES.PARENT)
             ? '/parents/me/students'
             : '/users/students';
@@ -375,6 +465,62 @@ export default function ProgressPage() {
     };
   }, [linkedStudents]);
   const selectedStudentBand = selectedStudent ? getProgressBand(selectedStudent) : null;
+  const teacherControlSummary = useMemo(() => {
+    const warningLogs = teacherAuditLogs.filter((log) => log.eventGroup === 'CanhBao').length;
+    const quizLogs = teacherAuditLogs.filter((log) => log.eventGroup === 'Quiz').length;
+    const gameAiLogs = teacherAuditLogs.filter((log) => log.eventGroup === 'TroChoi' || log.eventGroup === 'AI').length;
+    const openAlerts = teacherAlerts.filter((alert) => alert.status !== 'HoanThanh').length;
+    const lowQuizLogs = teacherAuditLogs.filter(
+      (log) => log.eventGroup === 'Quiz' && typeof log.progress === 'number' && log.progress < 80,
+    ).length;
+    return { warningLogs, quizLogs, gameAiLogs, openAlerts, lowQuizLogs };
+  }, [teacherAlerts, teacherAuditLogs]);
+  const visibleTeacherAuditLogs = useMemo(
+    () =>
+      teacherAuditLogs.filter((log) => {
+        const matchesStudent = !selectedStudentId || log.studentId === selectedStudentId;
+        const matchesType = teacherAuditFilter === 'all' || log.eventGroup === teacherAuditFilter;
+        return matchesStudent && matchesType;
+      }),
+    [selectedStudentId, teacherAuditFilter, teacherAuditLogs],
+  );
+  const selectedStudentAlerts = useMemo(
+    () =>
+      teacherAlerts
+        .filter((alert) => !selectedStudentId || alert.studentId === selectedStudentId)
+        .sort((left, right) => left.priority - right.priority || Date.parse(right.createdAt) - Date.parse(left.createdAt)),
+    [selectedStudentId, teacherAlerts],
+  );
+
+  async function handleCreateTeacherSupport() {
+    if (!session || !selectedStudent || !supportFeedback.trim()) return;
+    setSupportBusy(true);
+    setSupportMessage('');
+    try {
+      await apiPost(
+        `/users/students/${selectedStudent.id}/support`,
+        {
+          title: 'Nhắc nhở ôn tập từ giáo viên',
+          feedback: supportFeedback.trim(),
+          priority: supportPriority,
+        },
+        session.accessToken,
+      );
+      const refreshed = await apiGet<TeacherLearningControlResponse>(
+        '/progress/teacher/learning-control',
+        session.accessToken,
+      );
+      setLinkedStudents(refreshed.students);
+      setTeacherAuditLogs(refreshed.logs);
+      setTeacherAlerts(refreshed.alerts);
+      setSupportFeedback('');
+      setSupportMessage('Đã ghi cảnh báo vào audit log và gửi nhắc nhở cho học viên.');
+    } catch (err) {
+      setSupportMessage(err instanceof Error ? err.message : 'Không gửi được cảnh báo hỗ trợ.');
+    } finally {
+      setSupportBusy(false);
+    }
+  }
 
   if (!session) {
     return (
@@ -388,33 +534,33 @@ export default function ProgressPage() {
     <AppShell
       session={session}
       active="progress"
-      roleContext={USER_ROLES.ADMIN}
-      showSidebar={false}
-      eyebrow="Learning Analytics"
-      title="Tiến trình"
+      roleContext={isAdmin ? USER_ROLES.ADMIN : isParent ? USER_ROLES.PARENT : isManagementMode ? USER_ROLES.TEACHER : USER_ROLES.STUDENT}
+      showSidebar={isAdmin || (isManagementMode && !isAdmin) ? false : undefined}
+      eyebrow={isManagementMode && !isAdmin ? 'Giáo viên' : 'Learning Analytics'}
+      title={isManagementMode && !isAdmin ? 'Kiểm soát học tập và cảnh báo' : 'Tiến trình'}
     >
-      <section className="pageHeroCompact">
-        <div>
-          <p className="eyebrow">Theo dõi học tập</p>
-          <h2>
-            {isAdmin
-              ? 'Quản trị viên theo dõi tổng quan tiến trình học tập toàn hệ thống.'
-              : isParent
-              ? 'Phụ huynh theo dõi tiến trình học tập chi tiết của từng học viên đã liên kết.'
-              : isManagementMode
-                ? 'Giáo viên theo dõi tiến trình chi tiết của từng học viên trong lớp.'
-                : 'Tiến trình được tách thành trang riêng để xem trạng thái từng bài rõ hơn.'}
-          </h2>
-          <p>
-            Hệ thống lưu phần trăm hoàn thành, trạng thái học và điểm cao nhất để phục vụ mở khóa bài
-            mới và báo cáo học tập.
-          </p>
-        </div>
-        <span className="inlineBadge">
-          <TrendingUp size={16} />
-          {isStudentSelectorMode ? `${linkedStudents.length} học viên` : `${average}% trung bình`}
-        </span>
-      </section>
+      {isManagementMode && !isAdmin ? null : (
+        <section className="pageHeroCompact">
+          <div>
+            <p className="eyebrow">Theo dõi học tập</p>
+            <h2>
+              {isAdmin
+                ? 'Quản trị viên theo dõi tổng quan tiến trình học tập toàn hệ thống.'
+                : isParent
+                  ? 'Phụ huynh theo dõi tiến trình học tập chi tiết của từng học viên đã liên kết.'
+                  : 'Tiến trình được tách thành trang riêng để xem trạng thái từng bài rõ hơn.'}
+            </h2>
+            <p>
+              Hệ thống lưu phần trăm hoàn thành, trạng thái học và điểm cao nhất để phục vụ mở khóa bài
+              mới và báo cáo học tập.
+            </p>
+          </div>
+          <span className="inlineBadge">
+            <TrendingUp size={16} />
+            {isStudentSelectorMode ? `${linkedStudents.length} học viên` : `${average}% trung bình`}
+          </span>
+        </section>
+      )}
 
       {error ? <div className="errorBox dashboardMessage">{error}</div> : null}
       {loadingLinkedStudents ? <div className="subtleBox dashboardMessage">Đang tải danh sách học viên...</div> : null}
@@ -422,7 +568,264 @@ export default function ProgressPage() {
         <div className="subtleBox dashboardMessage">Đang tải tiến trình học tập chi tiết...</div>
       ) : null}
 
-      {isAdmin ? (
+      {isManagementMode && !isAdmin ? (
+        <>
+          <section className="teacherAuditHero">
+            <div>
+              <p className="eyebrow">Audit học tập và cảnh báo</p>
+              <h2>Kiểm soát quá trình học TOEIC của học viên bằng audit log.</h2>
+              <p>
+                Giáo viên chọn học viên, xem toàn bộ log học tập theo thời gian, phát hiện điểm yếu,
+                cảnh báo rủi ro và gửi nhắc nhở ôn tập ngay trong cùng một nghiệp vụ.
+              </p>
+            </div>
+            <span className="inlineBadge">
+              <ShieldAlert size={16} />
+              {teacherControlSummary.openAlerts} cảnh báo mở
+            </span>
+          </section>
+
+          <section className="teacherAuditMetrics" aria-label="Tổng quan audit giáo viên">
+            <div>
+              <Users size={18} />
+              <span>Học viên</span>
+              <strong>{linkedStudents.length}</strong>
+            </div>
+            <div>
+              <Activity size={18} />
+              <span>Audit log</span>
+              <strong>{teacherAuditLogs.length}</strong>
+            </div>
+            <div>
+              <ShieldAlert size={18} />
+              <span>Cảnh báo</span>
+              <strong>{teacherControlSummary.warningLogs}</strong>
+            </div>
+            <div>
+              <Award size={18} />
+              <span>Quiz</span>
+              <strong>{teacherControlSummary.quizLogs}</strong>
+            </div>
+            <div>
+              <Sparkles size={18} />
+              <span>Game / AI</span>
+              <strong>{teacherControlSummary.gameAiLogs}</strong>
+            </div>
+            <div>
+              <Target size={18} />
+              <span>Quiz dưới 80%</span>
+              <strong>{teacherControlSummary.lowQuizLogs}</strong>
+            </div>
+          </section>
+
+          <section className="teacherAuditCommand">
+            <div className="field">
+              <label htmlFor="teacher-control-search">Tìm học viên</label>
+              <div className="teacherAuditSearch">
+                <Search size={16} />
+                <input
+                  id="teacher-control-search"
+                  value={progressSearch}
+                  onChange={(event) => setProgressSearch(event.target.value)}
+                  placeholder="Tên, email, cấp độ hoặc mục tiêu TOEIC"
+                />
+              </div>
+            </div>
+            <div className="teacherAuditFilterRows">
+              <div className="teacherAuditFilterRow" aria-label="Lọc nhóm học viên">
+                {progressBandFilters.map((filter) => (
+                  <button
+                    key={filter.key}
+                    type="button"
+                    className={progressBandFilter === filter.key ? 'active' : ''}
+                    onClick={() => setProgressBandFilter(filter.key)}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+              <div className="teacherAuditFilterRow" aria-label="Lọc loại audit">
+                {teacherAuditFilters.map((filter) => (
+                  <button
+                    key={filter.key}
+                    type="button"
+                    className={teacherAuditFilter === filter.key ? 'active' : ''}
+                    onClick={() => setTeacherAuditFilter(filter.key)}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="teacherAuditRoster">
+            <div className="sectionTitle">
+              <div>
+                <h2>Chọn học viên cần kiểm soát</h2>
+                <span>
+                  {visibleLinkedStudents.length}/{linkedStudents.length} học viên đang hiển thị
+                </span>
+              </div>
+            </div>
+            <div className="teacherAuditStudentGrid">
+              {visibleLinkedStudents.map((student) => {
+                const active = selectedStudentId === student.id;
+                const band = getProgressBand(student);
+                const initials = student.fullName
+                  .split(' ')
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .map((part) => part[0]?.toUpperCase())
+                  .join('');
+
+                return (
+                  <button
+                    key={student.id}
+                    type="button"
+                    className={`teacherAuditStudentCard ${active ? 'active' : ''}`}
+                    onClick={() => setSelectedStudentId(student.id)}
+                    aria-pressed={active}
+                  >
+                    <div className="teacherAuditStudentHead">
+                      <div className="teacherAuditAvatar">{initials || 'HV'}</div>
+                      <div>
+                        <strong>{student.fullName}</strong>
+                        <span>{student.email}</span>
+                      </div>
+                      <span className={`studentCareTag ${band}`}>{getProgressBandLabel(band)}</span>
+                    </div>
+                    <div className="progressRail">
+                      <div
+                        className="progressFill"
+                        style={{ width: `${Math.min(100, Math.max(0, student.averageProgress))}%` }}
+                      />
+                    </div>
+                    <div className="teacherAuditFacts">
+                      <span>{student.averageProgress}% tiến độ</span>
+                      <span>{student.bestQuizScore}% quiz tốt nhất</span>
+                      <span>{student.learningStreak} ngày liên tiếp</span>
+                      <span>{student.lockedLessons} khóa</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="teacherAuditWorkspace">
+            <div className="teacherAuditTimeline">
+              <div className="sectionTitle">
+                <div>
+                  <h2>Timeline audit</h2>
+                  <span>
+                    {visibleTeacherAuditLogs.length} log đang hiển thị
+                    {selectedStudent ? ` cho ${selectedStudent.fullName}` : ''}
+                  </span>
+                </div>
+              </div>
+
+              {visibleTeacherAuditLogs.map((log) => (
+                <article className={`teacherAuditLog tone-${log.eventGroup}`} key={`${log.eventGroup}:${log.id}`}>
+                  <div className="teacherAuditLogIcon">
+                    {log.eventGroup === 'Quiz' ? <Award size={18} /> : null}
+                    {log.eventGroup === 'CanhBao' ? <ShieldAlert size={18} /> : null}
+                    {log.eventGroup === 'TroChoi' || log.eventGroup === 'AI' ? <Sparkles size={18} /> : null}
+                    {log.eventGroup === 'BaiHoc' || log.eventGroup === 'ThongBao' ? <Activity size={18} /> : null}
+                  </div>
+                  <div className="teacherAuditLogBody">
+                    <div className="teacherAuditLogHead">
+                      <div>
+                        <span>{log.studentName}</span>
+                        <strong>{log.title}</strong>
+                      </div>
+                      <time>{formatDate(log.occurredAt)}</time>
+                    </div>
+                    <p>{log.description}</p>
+                    <div className="teacherAuditLogMeta">
+                      <span>{getAuditGroupLabel(log.eventGroup)}</span>
+                      <span>{log.status}</span>
+                      {typeof log.progress === 'number' ? <span>{Math.round(log.progress)}% hoàn thành</span> : null}
+                      {typeof log.score === 'number' ? <span>Điểm {Math.round(log.score)}</span> : null}
+                    </div>
+                  </div>
+                </article>
+              ))}
+
+              {!visibleTeacherAuditLogs.length && !loading ? (
+                <div className="subtleBox">
+                  Chưa có log phù hợp với bộ lọc. Đổi học viên hoặc loại audit để kiểm tra thêm.
+                </div>
+              ) : null}
+            </div>
+
+            <aside className="teacherAuditSide">
+              <section className="panel">
+                <div className="sectionTitle">
+                  <div>
+                    <h2>Cảnh báo ưu tiên</h2>
+                    <span>Quiz thấp, tiến độ yếu hoặc gợi ý ôn tập đang mở</span>
+                  </div>
+                </div>
+                <div className="teacherAuditAlertList">
+                  {selectedStudentAlerts.slice(0, 6).map((alert) => (
+                    <article key={alert.id}>
+                      <strong>{alert.studentName}</strong>
+                      <span>{alert.reason}</span>
+                      <em>
+                        {getPriorityLabel(alert.priority)} • {alert.lessonTitle ?? 'Không gắn bài'} •{' '}
+                        {Math.round(alert.lessonProgress)}%
+                      </em>
+                    </article>
+                  ))}
+                  {!selectedStudentAlerts.length ? (
+                    <div className="subtleBox">Không có cảnh báo đang mở cho bộ lọc này.</div>
+                  ) : null}
+                </div>
+              </section>
+
+              <section className="panel teacherAuditActionBox">
+                <div className="sectionTitle">
+                  <div>
+                    <h2>Tạo nhắc nhở / gợi ý ôn</h2>
+                    <span>Gửi cảnh báo cho học viên và ghi lại trong audit</span>
+                  </div>
+                </div>
+                <label className="field">
+                  <span>Học viên</span>
+                  <input value={selectedStudent?.fullName ?? 'Chưa chọn'} readOnly />
+                </label>
+                <label className="field">
+                  <span>Mức ưu tiên</span>
+                  <select value={supportPriority} onChange={(event) => setSupportPriority(Number(event.target.value))}>
+                    <option value={1}>Khẩn cấp</option>
+                    <option value={2}>Ưu tiên</option>
+                    <option value={3}>Theo dõi</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Nội dung nhắc nhở</span>
+                  <textarea
+                    value={supportFeedback}
+                    onChange={(event) => setSupportFeedback(event.target.value)}
+                    placeholder="Ví dụ: Ôn lại Part 5 về thì hiện tại hoàn thành và làm lại 20 câu trước thứ Sáu."
+                    rows={5}
+                  />
+                </label>
+                <button
+                  className="primaryButton"
+                  type="button"
+                  onClick={handleCreateTeacherSupport}
+                  disabled={!selectedStudent || !supportFeedback.trim() || supportBusy}
+                >
+                  {supportBusy ? 'Đang gửi...' : 'Ghi cảnh báo'}
+                </button>
+                {supportMessage ? <div className="subtleBox">{supportMessage}</div> : null}
+              </section>
+            </aside>
+          </section>
+        </>
+      ) : isAdmin ? (
         <>
           <section className="progressAdminHero">
             <div className="progressAdminHeroCopy">

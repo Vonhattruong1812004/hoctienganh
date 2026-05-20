@@ -1,87 +1,103 @@
-# EnglishPro
+# EnglishPro TOEIC Learning Platform
 
-EnglishPro là hệ thống học tiếng Anh full-stack theo hướng sản phẩm thực tế. Dự án có nhiều actor, dashboard riêng theo vai trò, học từ vựng theo chủ đề, học ngữ pháp TOEIC, giới thiệu cấu trúc bài thi TOEIC, thi thử ETS, game hóa với pet và AI Vision Lab.
+EnglishPro is a full-stack TOEIC learning platform built around role-based workflows for students, parents, teachers, and administrators. The system focuses on vocabulary by topic, TOEIC grammar, TOEIC exam guidance, ETS-style mock tests, learning audit trails, gamified learning, and content governance.
 
-## Điểm Nổi Bật
+## Highlights
 
-- Actor rõ ràng: học viên, phụ huynh, giáo viên, quản trị viên.
-- Dashboard chỉ đóng vai trò trung tâm chức năng; từng UC có trang riêng.
-- Học viên học theo chủ đề: từ vựng, ngữ cảnh, phát âm, hình ảnh và game ôn ngay trong luồng học.
-- Kho ngữ pháp TOEIC theo topic, có màn học và luyện tập.
-- UC giới thiệu TOEIC Listening & Reading, Speaking & Writing, các Part và mẹo làm bài.
-- UC thi thử TOEIC ETS: chọn đề, chọn Part, đếm giờ, làm bài, nộp bài và xem kết quả.
-- Listening Part 1, 2, 3, 4 đã được tách khỏi PDF để làm trực tiếp trong giao diện.
-- Zoo theme với pet, hiệu ứng ambient, audio tương tác và giao diện sinh động.
-- Backend NestJS cung cấp auth, bài học, quiz, tiến trình, game hóa, phụ huynh, vision và tích hợp nguồn ngoài.
+- Role dashboards for Student, Parent, Teacher, and Admin.
+- Student workflow: learn TOEIC vocabulary by topic, study grammar, understand TOEIC parts, take ETS-style mock tests, view progress, and use the learning playground.
+- Parent workflow: audit child learning activity, review quiz/mock-test results, receive support suggestions, and manage learning notifications.
+- Teacher workflow: manage TOEIC vocabulary topics, grammar topics, practice-test content, and student learning audit/corrections.
+- Admin workflow: manage accounts and permissions, moderate TOEIC content, monitor learning data, and manage system configuration/logs.
+- ETS mock-test experience: choose test, choose parts, auto timer, answer sheet, submit, score, review correct/wrong/skipped questions, and inspect explanations.
+- Listening and Reading assets are split from PDF into UI-ready question/group images instead of forcing learners to read the whole PDF.
+- Zoo-themed learning experience with pets, ambient effects, speech/audio interactions, mini games, and AI Vision hooks.
 
-## Công Nghệ
+## Tech Stack
 
-- Frontend: Next.js 15, React 19, TypeScript, CSS thuần.
-- Backend: NestJS 11, TypeScript.
+- Frontend: Next.js 15, React 19, TypeScript, CSS.
+- Backend: NestJS 11, TypeScript, JWT auth.
 - Database: PostgreSQL, Prisma.
-- Local services: Docker Compose, Redis.
-- AI/vision: TensorFlow MobileNet trên web, OpenAI Vision khi cấu hình key.
-- Nguồn nội dung: Datamuse, Free Dictionary, LanguageTool, Tatoeba, Openverse, Wikipedia/Wikimedia và các API có key.
-- TOEIC assets: PDF/audio ETS local, script Swift/PDFKit để cắt đề thành ảnh dùng trong UI.
+- Local services: Docker Compose, Redis-ready setup.
+- AI and integrations: TensorFlow MobileNet in browser, optional OpenAI Vision, Datamuse, Free Dictionary, LanguageTool, Tatoeba, Openverse, Wikipedia/Wikimedia.
+- TOEIC tooling: Swift/PDFKit scripts for extracting ETS PDF content into web assets.
 
-## Cấu Trúc Dự Án
-
-```text
-apps/web                 Frontend Next.js
-apps/api                 Backend NestJS
-packages/database        Prisma schema và database helpers
-packages/shared          Kiểu dữ liệu và hằng số dùng chung
-docs                     Tài liệu phân tích/nghiệp vụ
-scripts                  Script xử lý PDF ETS thành asset giao diện
-ETS                      Thư mục đề/audio/key local, không nên commit lên Git
-apps/web/public/ets      Asset ảnh đã cắt để web hiển thị từng câu/cụm câu
-```
-
-## Các Trang Chính
+## Project Structure
 
 ```text
-/login                   Đăng nhập
-/dashboard               Dashboard theo actor
-/lessons                 Học từ vựng theo chủ đề
-/lessons/[id]/learn      Màn học từ vựng/ngữ cảnh
-/lessons/[id]/game       Game ôn theo chủ đề
-/grammar                 Học ngữ pháp TOEIC
-/grammar/[id]            Chi tiết topic ngữ pháp
-/toeic-guide             Giới thiệu bài thi TOEIC và tips từng Part
-/ets-practice            Chọn đề ETS, loại bài thi và Part
-/ets-practice/take       Phòng thi thử
-/ets-practice/result     Kết quả, đúng/sai, phân tích và lời giải
-/playground              Sân chơi học tập, pet, mini game, AI Vision
-/progress                Tiến trình học viên
-/admin                   Dashboard quản trị viên
-/parent/support          Phụ huynh theo dõi hỗ trợ
-/students                Giáo viên theo dõi học viên
+apps/web                 Next.js frontend
+apps/api                 NestJS backend
+packages/database        Prisma schema and database helpers
+packages/shared          Shared roles, constants, and types
+docs                     Analysis and supporting documents
+scripts                  Dev helpers and ETS asset extraction scripts
+apps/web/public/ets      Generated TOEIC image assets used by the UI
+ETS                      Local source PDFs/audio/keys, kept out of Git
 ```
 
-## Thi Thử TOEIC ETS
+## Main Routes
 
-Luồng thi thử hiện tại:
+```text
+/login                   Login
+/dashboard               Role dashboard
 
-1. Vào `/ets-practice`.
-2. Chọn TOEIC Listening & Reading.
-3. Chọn đề ETS 2026 Test 1-10.
-4. Tick Part muốn làm.
-5. Bấm làm bài để vào `/ets-practice/take`.
-6. Đồng hồ tự chạy ngay khi vào phòng thi.
-7. Chọn đáp án, nộp bài hoặc tự nộp khi hết giờ.
-8. Xem kết quả ở `/ets-practice/result`.
+/lessons                 Student vocabulary topic library
+/lessons/[id]/learn      Vocabulary learning screen
+/lessons/[id]/game       Topic game review
+/grammar                 TOEIC grammar topics
+/grammar/[id]            Grammar topic detail and practice
+/toeic-guide             TOEIC test introduction and tips
+/ets-practice            Mock-test selector
+/ets-practice/take       Mock-test room
+/ets-practice/result     Mock-test result and explanations
+/playground              Learning playground, pets, mini game, AI Vision
+/progress                Student progress
 
-Trạng thái tách đề:
+/parent/audit            Child learning audit trail
+/parent/results          Child learning and mock-test results
+/parent/support          Alerts and review suggestions
+/parent/notifications    Parent reminders and interactions
 
-- Part 1: tách thành 6 ảnh/câu cho mỗi đề.
-- Part 2: hiển thị từng câu nghe, audio riêng, chọn A/B/C tại chỗ.
-- Part 3: tách thành 13 cụm hội thoại, mỗi cụm 3 câu.
-- Part 4: tách thành 10 cụm bài nói, mỗi cụm 3 câu.
-- Part 5-7: đang mở rộng theo hướng tách đề đọc thành cụm/câu, hiện có script hỗ trợ xử lý PDF.
+/students                Teacher student management
+/toeic-practice          Teacher practice-test management
 
-## ETS Assets Local
+/admin/users             Account and permission management
+/admin/content           TOEIC content moderation
+/admin/progress          Learning data monitoring
+/admin                   System configuration, integrations, and logs
+```
 
-Thư mục `ETS/` chứa PDF/audio/key dung lượng lớn, nên để local tại root project:
+## Admin Use Cases
+
+1. Account and permission management: create, edit, lock/unlock, delete users, and assign actor roles.
+2. TOEIC content moderation: review learning paths, topics, lessons, quizzes, and practice-test readiness before publishing.
+3. Learning data monitoring: inspect student progress, quiz/mock-test signals, audit logs, alerts, and create reminders.
+4. System configuration and logs: review API/system health, integration status, operational logs, and admin checkpoints.
+
+## TOEIC Mock Test Flow
+
+1. Open `/ets-practice`.
+2. Choose TOEIC Listening & Reading.
+3. Choose an ETS test.
+4. Tick one or more parts.
+5. Start the test; the timer runs automatically.
+6. Answer directly in the UI.
+7. Submit manually or let the system auto-submit when time is over.
+8. Review score, accuracy, correct/wrong/skipped answers, and explanations in `/ets-practice/result`.
+
+Current asset coverage:
+
+- Part 1: individual image per question.
+- Part 2: audio-first question-response UI.
+- Part 3: conversation groups with grouped questions.
+- Part 4: talk groups with grouped questions.
+- Part 5: individual and grouped reading-question images.
+- Part 6: passage group images.
+- Part 7: reading passage group images.
+
+## Local ETS Assets
+
+Keep the original ETS source files locally at the project root:
 
 ```text
 ETS/
@@ -93,20 +109,17 @@ ETS/
   KEY VÀ GIẢI THÍCH CHI TIẾT/
 ```
 
-Không nên commit `ETS/` lên GitHub vì dung lượng lớn và có thể vượt giới hạn file. Web đọc các file này qua route `/api/ets-assets/...` khi chạy local.
+Do not commit `ETS/` because it can be large and may contain licensed material. Generated UI assets live in `apps/web/public/ets`.
 
-Các asset ảnh đã cắt phục vụ UI nằm trong `apps/web/public/ets`.
-
-## Yêu Cầu
+## Requirements
 
 - Node.js 20+
 - npm 10+
 - PostgreSQL 16+
-- Redis 7 nếu chạy đầy đủ backend
-- Docker Desktop nếu dùng Docker Compose
-- macOS có Swift/PDFKit nếu cần chạy script cắt PDF ETS
+- Docker Desktop if using Docker Compose
+- macOS with Swift/PDFKit if regenerating ETS PDF assets
 
-## Cài Đặt
+## Installation
 
 ```bash
 npm install
@@ -114,89 +127,20 @@ cp .env.example .env
 npm run db:generate
 ```
 
-## Chạy Local
+## Environment Variables
 
-Chạy cả web và API:
-
-```bash
-npm run dev
-```
-
-Chạy riêng web:
-
-```bash
-npm run dev:web
-```
-
-Chạy riêng API:
-
-```bash
-npm run dev:api
-```
-
-Mặc định:
-
-```text
-Web: http://localhost:4000
-API: http://localhost:4100/api
-```
-
-Nếu gặp `EADDRINUSE`, nghĩa là port đã có tiến trình đang chạy. Kiểm tra và dừng tiến trình cũ:
-
-```bash
-lsof -Pan -iTCP:4000 -sTCP:LISTEN
-lsof -Pan -iTCP:4100 -sTCP:LISTEN
-```
-
-## Chạy Bằng Docker
-
-```bash
-npm run docker:up
-```
-
-Dừng Docker:
-
-```bash
-npm run docker:down
-```
-
-## Database
-
-Sinh Prisma client:
-
-```bash
-npm run db:generate
-```
-
-Nạp dữ liệu mẫu:
-
-```bash
-npm run db:seed:sql
-```
-
-Hoặc import thủ công:
-
-```bash
-psql "$DATABASE_URL" -f thiet_ke_csdl_hoc_tieng_anh.sql
-```
-
-Một số file dữ liệu mở rộng:
-
-```text
-du_lieu_mo_rong_hoc_tieng_anh.sql
-cap_nhat_quiz_tieng_viet_co_dau.sql
-cap_nhat_anh_minh_hoa_daily_routine.sql
-```
-
-## Biến Môi Trường
-
-Các nguồn không cần key vẫn có thể chạy ở chế độ cơ bản. Muốn mở thêm ảnh, audio, AI Vision và từ điển nâng cao thì cấu hình:
+Minimum local setup:
 
 ```bash
 DATABASE_URL=
 JWT_SECRET=
 API_PORT=4100
-NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:4100/api
+NEXT_PUBLIC_API_URL=http://127.0.0.1:4100/api
+```
+
+Optional integrations:
+
+```bash
 MERRIAM_WEBSTER_LEARNERS_KEY=
 PIXABAY_API_KEY=
 PEXELS_API_KEY=
@@ -204,7 +148,66 @@ OPENAI_API_KEY=
 OPENAI_VISION_MODEL=gpt-4.1-mini
 ```
 
-## Tài Khoản Mẫu
+## Run Locally
+
+Run web and API together:
+
+```bash
+npm run dev
+```
+
+Run separately:
+
+```bash
+npm run dev:web
+npm run dev:api
+```
+
+Default local URLs:
+
+```text
+Web: http://localhost:4000
+API: http://localhost:4100/api
+```
+
+The dev script frees ports 4000 and 4100 before starting. If needed, inspect ports manually:
+
+```bash
+lsof -Pan -iTCP:4000 -sTCP:LISTEN
+lsof -Pan -iTCP:4100 -sTCP:LISTEN
+```
+
+## Docker
+
+```bash
+npm run docker:up
+npm run docker:down
+```
+
+## Database
+
+Generate Prisma client:
+
+```bash
+npm run db:generate
+```
+
+Seed SQL data:
+
+```bash
+npm run db:seed:sql
+```
+
+Useful SQL files:
+
+```text
+thiet_ke_csdl_hoc_tieng_anh.sql
+du_lieu_mo_rong_hoc_tieng_anh.sql
+cap_nhat_quiz_tieng_viet_co_dau.sql
+cap_nhat_anh_minh_hoa_daily_routine.sql
+```
+
+## Demo Accounts
 
 ```text
 admin@englishpro.local      / 123456
@@ -214,7 +217,7 @@ hocvien1@englishpro.local   / 123456
 hocvien2@englishpro.local   / 123456
 ```
 
-## Scripts Hữu Ích
+## Useful Scripts
 
 ```bash
 npm run dev
@@ -230,23 +233,28 @@ npm run docker:up
 npm run docker:down
 ```
 
-Script xử lý PDF ETS:
+ETS asset scripts:
 
 ```bash
-CLANG_MODULE_CACHE_PATH=/private/tmp/clang-module-cache swift scripts/generate-ets-part1-assets.swift
-CLANG_MODULE_CACHE_PATH=/private/tmp/clang-module-cache swift scripts/generate-ets-part3-assets.swift
-CLANG_MODULE_CACHE_PATH=/private/tmp/clang-module-cache swift scripts/generate-ets-part4-assets.swift
+CLANG_MODULE_CACHE_PATH=/private/tmp/clang-module-cache swift scripts/generate-ets-answer-keys.swift
+CLANG_MODULE_CACHE_PATH=/private/tmp/clang-module-cache swift scripts/generate-ets-part5-assets.swift
+CLANG_MODULE_CACHE_PATH=/private/tmp/clang-module-cache swift scripts/generate-ets-part5-group-assets.swift
+CLANG_MODULE_CACHE_PATH=/private/tmp/clang-module-cache swift scripts/generate-ets-part6-group-assets.swift
+CLANG_MODULE_CACHE_PATH=/private/tmp/clang-module-cache swift scripts/generate-ets-part7-group-assets.swift
 ```
 
-## Kiểm Tra Trước Khi Commit
+## Verification
+
+Before committing:
 
 ```bash
 npm run build -w apps/web
 npm run build -w apps/api
+git diff --check
 ```
 
-## Ghi Chú Phát Triển
+## Git Notes
 
-- Không đưa `.env`, `.env.local`, `node_modules`, `.next`, database volume và thư mục `ETS/` lên Git.
-- Các UC đang được tách theo đúng workflow: dashboard chỉ là cổng vào, mỗi chức năng có màn riêng.
-- TOEIC mock test đang ưu tiên trải nghiệm giống phòng thi thật: chọn Part, tự chạy giờ, làm bài trực tiếp, xem kết quả ở trang riêng.
+- Do not commit `.env`, `.env.local`, `node_modules`, `.next`, database volumes, or the raw `ETS/` folder.
+- Commit generated public ETS assets only when they are required by the UI.
+- Dashboard pages should remain role hubs; each business use case should live on its own route.

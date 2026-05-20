@@ -9,6 +9,11 @@ import { ProgressService } from './progress.service';
 export class ProgressController {
   constructor(private readonly progressService: ProgressService) {}
 
+  @Get('teacher/learning-control')
+  findTeacherLearningControl(@CurrentUser() user: AuthUser) {
+    return this.progressService.findTeacherLearningControl(user);
+  }
+
   @Get('students/:studentId')
   findByStudent(@Param('studentId') studentId: string, @CurrentUser() user: AuthUser) {
     return this.progressService.findByStudent(studentId, user);

@@ -31,6 +31,9 @@ import {
   etsPart1QuestionImageAssets,
   etsPart3QuestionGroupImageAssets,
   etsPart4QuestionGroupImageAssets,
+  etsPart5QuestionGroupImageAssets,
+  etsPart6QuestionGroupImageAssets,
+  etsPart7QuestionGroupImageAssets,
   etsPartPaperAsset,
   etsQuestionInsight,
   getEtsPracticeTest,
@@ -98,9 +101,14 @@ export default function EtsPracticeTakePage() {
   const partOneImages = useMemo(() => etsPart1QuestionImageAssets(testNumber), [testNumber]);
   const partThreeGroups = useMemo(() => etsPart3QuestionGroupImageAssets(testNumber), [testNumber]);
   const partFourGroups = useMemo(() => etsPart4QuestionGroupImageAssets(testNumber), [testNumber]);
+  const partFiveGroups = useMemo(() => etsPart5QuestionGroupImageAssets(testNumber), [testNumber]);
+  const partSixGroups = useMemo(() => etsPart6QuestionGroupImageAssets(testNumber), [testNumber]);
+  const partSevenGroups = useMemo(() => etsPart7QuestionGroupImageAssets(testNumber), [testNumber]);
   const listeningQuestionGroups = selectedPart.id === 'part-4' ? partFourGroups : partThreeGroups;
   const usesInlineListening =
     selectedPart.id === 'part-1' || selectedPart.id === 'part-2' || selectedPart.id === 'part-3' || selectedPart.id === 'part-4';
+  const usesInlineQuestionBoard =
+    usesInlineListening || selectedPart.id === 'part-5' || selectedPart.id === 'part-6' || selectedPart.id === 'part-7';
   const firstActiveQuestion = activeQuestions[0] ?? selectedPart.from;
   const lastActiveQuestion = activeQuestions[activeQuestions.length - 1] ?? selectedPart.to;
   const paperMeta =
@@ -110,7 +118,13 @@ export default function EtsPracticeTakePage() {
         ? `${partOneImages.length} ảnh đã cắt`
         : selectedPart.id === 'part-2'
           ? `${audioTracks.length} câu nghe`
-        : `Trang đề ${currentPaper.page}`;
+          : selectedPart.id === 'part-5'
+            ? `${partFiveGroups.length} cụm câu đã cắt`
+            : selectedPart.id === 'part-6'
+              ? `${partSixGroups.length} passage đã cắt`
+              : selectedPart.id === 'part-7'
+                ? `${partSevenGroups.length} cụm đọc hiểu đã cắt`
+              : `Trang đề ${currentPaper.page}`;
 
   function scrollToQuestion(question: number) {
     document.getElementById(`question-${question}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -404,6 +418,145 @@ export default function EtsPracticeTakePage() {
                 })}
               </div>
             </section>
+          ) : selectedPart.id === 'part-5' ? (
+            <section className="etsPartFiveBoard" aria-label="Part 5 đã cắt theo cụm câu hỏi">
+              <div className="etsPanelHeading">
+                <FileText size={18} />
+                <strong>Part 5 làm trực tiếp theo cụm câu</strong>
+                <span>Câu 101-130 được cắt từ đề RC thành 6 cụm rõ ràng, không mở PDF thô.</span>
+              </div>
+
+              <div className="etsPartFiveList">
+                {partFiveGroups.map((group) => (
+                  <article key={group.id} id={`question-${group.from}`}>
+                    <div className="etsPartFiveCardHead">
+                      <small>Incomplete Sentences {group.index}</small>
+                      <strong>
+                        Câu {group.from}-{group.to}
+                      </strong>
+                    </div>
+
+                    <div className="etsPartFiveImageFrame">
+                      <img src={group.url} alt={group.alt} loading="lazy" />
+                    </div>
+
+                    <div className="etsPartThreeAnswerStack">
+                      {group.questions.map((question) => (
+                        <div className="etsPartThreeAnswerRow" id={`question-${question}`} key={question}>
+                          <strong>Câu {question}</strong>
+                          <div>
+                            {choicesForQuestion(question).map((choice) => (
+                              <button
+                                className={answers[question] === choice ? 'selected' : ''}
+                                type="button"
+                                onClick={() => setAnswers((current) => ({ ...current, [question]: choice }))}
+                                key={choice}
+                              >
+                                {choice}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : selectedPart.id === 'part-6' ? (
+            <section className="etsPartSixBoard" aria-label="Part 6 đã cắt theo từng passage">
+              <div className="etsPanelHeading">
+                <FileText size={18} />
+                <strong>Part 6 làm trực tiếp theo passage</strong>
+                <span>Câu 131-146 được cắt thành 4 passage, đọc đoạn và chọn A/B/C/D ngay bên dưới.</span>
+              </div>
+
+              <div className="etsPartSixList">
+                {partSixGroups.map((group) => (
+                  <article key={group.id}>
+                    <div className="etsPartSixCardHead">
+                      <small>Text Completion {group.index}</small>
+                      <strong>
+                        Câu {group.from}-{group.to}
+                      </strong>
+                    </div>
+
+                    <div className="etsPartSixImageFrame">
+                      <img src={group.url} alt={group.alt} loading="lazy" />
+                    </div>
+
+                    <div className="etsPartThreeAnswerStack">
+                      {group.questions.map((question) => (
+                        <div className="etsPartThreeAnswerRow" id={`question-${question}`} key={question}>
+                          <strong>Câu {question}</strong>
+                          <div>
+                            {choicesForQuestion(question).map((choice) => (
+                              <button
+                                className={answers[question] === choice ? 'selected' : ''}
+                                type="button"
+                                onClick={() => setAnswers((current) => ({ ...current, [question]: choice }))}
+                                key={choice}
+                              >
+                                {choice}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : selectedPart.id === 'part-7' ? (
+            <section className="etsPartSevenBoard" aria-label="Part 7 đã cắt theo từng cụm đọc hiểu">
+              <div className="etsPanelHeading">
+                <FileText size={18} />
+                <strong>Part 7 làm trực tiếp theo cụm đọc hiểu</strong>
+                <span>Câu 147-200 được chia theo từng passage. Cụm nhiều trang hiển thị liền nhau trong cùng một khối.</span>
+              </div>
+
+              <div className="etsPartSevenList">
+                {partSevenGroups.map((group) => (
+                  <article key={group.id}>
+                    <div className="etsPartSevenCardHead">
+                      <small>Reading set {group.index}</small>
+                      <strong>
+                        Câu {group.from}-{group.to}
+                      </strong>
+                    </div>
+
+                    <div className="etsPartSevenImageStack">
+                      {group.images.map((image) => (
+                        <div className="etsPartSevenImageFrame" key={image.id}>
+                          <img src={image.url} alt={image.alt} loading="lazy" />
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="etsPartThreeAnswerStack">
+                      {group.questions.map((question) => (
+                        <div className="etsPartThreeAnswerRow" id={`question-${question}`} key={question}>
+                          <strong>Câu {question}</strong>
+                          <div>
+                            {choicesForQuestion(question).map((choice) => (
+                              <button
+                                className={answers[question] === choice ? 'selected' : ''}
+                                type="button"
+                                onClick={() => setAnswers((current) => ({ ...current, [question]: choice }))}
+                                key={choice}
+                              >
+                                {choice}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
           ) : (
             <section className="etsIntegratedPaper" aria-label="Đề tích hợp theo Part">
               <div className="etsPanelHeading">
@@ -427,7 +580,7 @@ export default function EtsPracticeTakePage() {
             </span>
           </div>
 
-          {usesInlineListening ? (
+          {usesInlineQuestionBoard ? (
             <div className="etsAnswerStatusStrip">
               <span>
                 <Clock3 size={16} />
@@ -453,7 +606,7 @@ export default function EtsPracticeTakePage() {
             </div>
           )}
 
-          {usesInlineListening ? (
+          {usesInlineQuestionBoard ? (
             <div className="etsAnswerStatusGrid" aria-label={`Trạng thái trả lời câu ${firstActiveQuestion}-${lastActiveQuestion}`}>
               {activeQuestions.map((question) => {
                 const answered = Boolean(answers[question]);
@@ -498,7 +651,7 @@ export default function EtsPracticeTakePage() {
             </div>
           )}
 
-          {!usesInlineListening ? (
+          {!usesInlineQuestionBoard ? (
             <label className="etsKeyBox">
               <span>Key để chấm tự động</span>
               <textarea
