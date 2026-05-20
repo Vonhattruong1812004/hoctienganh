@@ -2,6 +2,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { INestApplication } from '@nestjs/common';
+import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
 
 type OpenverseImageSearchResponse = {
@@ -36,6 +37,27 @@ const mediaImageQueries: Record<string, string> = {
 };
 
 const mediaImageCache = new Map<string, { url: string; expiresAt: number }>();
+
+function parseCorsOrigins(value: string | undefined) {
+  return (value ?? '')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+}
+
+function isAllowedCorsOrigin(origin: string | undefined, allowedOrigins: string[]) {
+  if (!origin) {
+    return true;
+  }
+
+  const normalizedOrigin = origin.replace(/\/$/, '');
+
+  return (
+    allowedOrigins.includes('*') ||
+    allowedOrigins.includes(normalizedOrigin) ||
+    /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(normalizedOrigin)
+  );
+}
 
 type CuratedMediaImage = {
   title: string;
@@ -280,17 +302,32 @@ function registerMediaImageFallback(app: INestApplication) {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
-  const corsOrigin = config.get<string>('CORS_ORIGIN');
-  const allowedOrigins = corsOrigin
-    ? corsOrigin
-        .split(',')
-        .map((origin) => origin.trim())
-        .filter(Boolean)
-    : true;
+  const allowedOrigins = parseCorsOrigins(config.get<string>('CORS_ORIGIN'));
 
   app.setGlobalPrefix('api');
+  app.use((request: Request, response: Response, next: NextFunction) => {
+    const origin = request.headers.origin;
+
+    if (typeof origin === 'string' && isAllowedCorsOrigin(origin, allowedOrigins)) {
+      response.header('Access-Control-Allow-Origin', origin);
+      response.header('Vary', 'Origin');
+    }
+
+    response.header('Access-Control-Allow-Credentials', 'true');
+    response.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    response.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+
+    if (request.method === 'OPTIONS') {
+      response.sendStatus(204);
+      return;
+    }
+
+    next();
+  });
   app.enableCors({
-    origin: allowedOrigins,
+    origin: (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => {
+      callback(null, isAllowedCorsOrigin(origin, allowedOrigins));
+    },
     credentials: true,
   });
   app.useGlobalPipes(
