@@ -280,10 +280,17 @@ function registerMediaImageFallback(app: INestApplication) {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
+  const corsOrigin = config.get<string>('CORS_ORIGIN');
+  const allowedOrigins = corsOrigin
+    ? corsOrigin
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+    : true;
 
   app.setGlobalPrefix('api');
   app.enableCors({
-    origin: true,
+    origin: allowedOrigins,
     credentials: true,
   });
   app.useGlobalPipes(
@@ -295,8 +302,9 @@ async function bootstrap() {
   );
   registerMediaImageFallback(app);
 
-  const port = config.get<number>('API_PORT') ?? 4000;
-  await app.listen(port, '0.0.0.0');
+  const configuredPort = process.env.PORT ?? config.get<string>('API_PORT') ?? '4000';
+  const port = Number(configuredPort);
+  await app.listen(Number.isNaN(port) ? 4000 : port, '0.0.0.0');
 }
 
 void bootstrap();

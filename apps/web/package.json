@@ -5,12 +5,13 @@
   "scripts": {
     "predev": "node ../../scripts/free-dev-ports.mjs 4000",
     "dev": "next dev --hostname 0.0.0.0 --port 4000",
-    "build": "NEXT_DIST_DIR=.next-build next build",
-    "start": "NEXT_DIST_DIR=.next-build next start --port 4000",
+    "build": "next build",
+    "start": "next start --port 4000",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@english-learning/shared": "*",
     "@tensorflow-models/mobilenet": "^2.1.1",
     "@tensorflow/tfjs": "^4.22.0",
     "clsx": "^2.1.1",
