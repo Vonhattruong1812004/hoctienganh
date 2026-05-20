@@ -62,7 +62,7 @@ export function PwaInstallButton() {
     setInstallPrompt(null);
   };
 
-  const shouldShowInstallButton = pathname === '/dashboard' || pathname.startsWith('/dashboard/');
+  const shouldShowInstallButton = pathname === '/login' || pathname === '/dashboard' || pathname.startsWith('/dashboard/');
 
   if (!shouldShowInstallButton) {
     return null;
