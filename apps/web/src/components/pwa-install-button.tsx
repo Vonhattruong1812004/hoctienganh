@@ -62,7 +62,9 @@ export function PwaInstallButton() {
     setInstallPrompt(null);
   };
 
-  if (pathname !== '/dashboard') {
+  const shouldShowInstallButton = pathname === '/dashboard' || pathname.startsWith('/dashboard/');
+
+  if (!shouldShowInstallButton) {
     return null;
   }
 
@@ -79,11 +81,11 @@ export function PwaInstallButton() {
     <span style={styles.wrap}>
       <button className="secondaryButton" style={styles.button} type="button" onClick={() => void handleInstall()}>
         <Download size={16} />
-        {installPrompt ? 'Tải app' : 'Cách tải app'}
+        Tải app
       </button>
       {showGuide ? (
         <span style={styles.hint}>
-          Android/Chrome: mở menu trình duyệt rồi chọn Cài đặt ứng dụng. iPhone/Safari: Chia sẻ rồi chọn Thêm vào màn hình chính.
+          Nếu trình duyệt chưa mở hộp cài đặt, dùng nút cài trên thanh địa chỉ. iPhone/Safari: Chia sẻ rồi chọn Thêm vào màn hình chính.
         </span>
       ) : null}
     </span>
@@ -94,8 +96,8 @@ const styles = {
   wrap: {
     position: 'fixed',
     right: 'max(18px, env(safe-area-inset-right))',
-    bottom: 'max(18px, env(safe-area-inset-bottom))',
-    zIndex: 60,
+    top: 'max(92px, env(safe-area-inset-top))',
+    zIndex: 1000,
     display: 'inline-flex',
     flexDirection: 'column',
     alignItems: 'flex-end',
@@ -111,8 +113,8 @@ const styles = {
   state: {
     position: 'fixed',
     right: 'max(18px, env(safe-area-inset-right))',
-    bottom: 'max(18px, env(safe-area-inset-bottom))',
-    zIndex: 60,
+    top: 'max(92px, env(safe-area-inset-top))',
+    zIndex: 1000,
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
