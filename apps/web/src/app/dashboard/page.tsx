@@ -1706,6 +1706,8 @@ function StudentMenuDashboard({
           </div>
 
           <div className="adminPixelScene studentZooPixelScene" aria-hidden="true">
+            <img className="studentZooGif" src="/media/pixel-zoo.gif" alt="" />
+            <span className="studentZooGifShade" />
             <span className="pixelSun" />
             <span className="pixelCloud pixelCloudOne" />
             <span className="pixelCloud pixelCloudTwo" />
