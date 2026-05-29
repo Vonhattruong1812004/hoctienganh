@@ -13,6 +13,7 @@ import {
   FileText,
   Flame,
   Gamepad2,
+  Headphones,
   Heart,
   LibraryBig,
   LockKeyhole,
@@ -1717,6 +1718,24 @@ function StudentMenuDashboard({
             <h2>Chọn luồng học TOEIC</h2>
           </div>
 
+          <div className="studentToeicScene" aria-hidden="true">
+            <span className="studentToeicCard studentToeicCardOne">
+              <BookOpen size={20} />
+              <b>Vocabulary</b>
+            </span>
+            <span className="studentToeicCard studentToeicCardTwo">
+              <Headphones size={20} />
+              <b>Listening</b>
+            </span>
+            <span className="studentToeicCard studentToeicCardThree">
+              <ClipboardCheck size={20} />
+              <b>Grammar</b>
+            </span>
+            <span className="studentToeicOrbit" />
+            <span className="studentToeicTimer">120</span>
+            <span className="studentToeicWave studentToeicWaveOne" />
+            <span className="studentToeicWave studentToeicWaveTwo" />
+          </div>
         </div>
 
         <div className="sectionTitle adminMenuHeading">
