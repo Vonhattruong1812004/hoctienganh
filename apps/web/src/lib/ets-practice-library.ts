@@ -27,7 +27,8 @@ export const etsPracticeParts: EtsPracticePart[] = [
     from: 1,
     to: 6,
     durationMinutes: 4,
-    direction: 'Nhìn ảnh trong PDF LC, nghe 4 mô tả và chọn A/B/C/D.',
+    direction:
+      'Directions: For each question in this part, you will hear four statements about a picture in your test book. These statements will be spoken only one time and will not be printed in your test book. Select the statement that best describes what you see in the picture and mark the letter (A), (B), (C), or (D) on your answer sheet.',
     paperPageOffset: 0,
     reviewFocus: 'Quan sát ảnh, chủ thể, hành động, vị trí đồ vật và thì hiện tại tiếp diễn.',
   },

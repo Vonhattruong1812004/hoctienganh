@@ -997,23 +997,6 @@ export default function GrammarLibraryPage() {
         </div>
       </header>
 
-      <section className="grammarHero">
-        <div>
-          <p className="eyebrow">TOEIC Reading • Part 5/6</p>
-          <h2>Chọn topic ngữ pháp để học rồi luyện game ngay.</h2>
-          <p>
-            Bộ topic này tập trung vào các điểm ngữ pháp hay gặp trong Incomplete Sentences và Text Completion:
-            thì, từ loại, bị động, mệnh đề, giới từ, liên từ, rút gọn và cấu trúc câu công sở.
-          </p>
-        </div>
-        <div className="grammarHeroStats">
-          <strong>{toeicGrammarTopics.length}</strong>
-          <span>topic TOEIC</span>
-          <strong>{toeicGrammarGroups.length}</strong>
-          <span>nhóm ngữ pháp</span>
-        </div>
-      </section>
-
       <section className="grammarToolbar" aria-label="Lọc topic ngữ pháp">
         <label className="field">
           <span>

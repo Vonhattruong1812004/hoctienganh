@@ -272,6 +272,12 @@ export default function ToeicPracticePage() {
     if (session?.user.roles.includes(USER_ROLES.TEACHER)) writeStore(store);
   }, [session, store]);
 
+  useEffect(() => {
+    if (session && !session.user.roles.includes(USER_ROLES.TEACHER)) {
+      router.replace('/ets-practice');
+    }
+  }, [router, session]);
+
   const tests = useMemo(() => {
     const deleted = new Set(store.deletedIds);
     const base = etsPracticeTests
@@ -470,8 +476,8 @@ export default function ToeicPracticePage() {
           </div>
         </header>
         <section className="panel">
-          <h2>UC thi thử nằm ở trang riêng.</h2>
-          <p>Học viên vào màn chọn Part, làm bài và xem kết quả tại UC thi thử TOEIC.</p>
+          <h2>Đang chuyển sang thi thử TOEIC.</h2>
+          <p>Trang này dùng cho giáo viên quản lý đề. Học viên làm bài tại UC thi thử.</p>
           <Link className="primaryButton" href="/ets-practice">
             Vào thi thử
           </Link>

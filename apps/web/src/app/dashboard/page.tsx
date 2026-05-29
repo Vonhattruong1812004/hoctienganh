@@ -291,12 +291,6 @@ const roleCommandItems: Record<
       text: 'Xem cấu trúc Listening & Reading, Speaking & Writing, cách làm từng Part và mẹo đạt điểm cao.',
     },
     {
-      href: '/toeic-practice',
-      icon: PlayCircle,
-      label: 'Ôn luyện bài thi mẫu TOEIC',
-      text: 'Chọn đề mô phỏng, luyện từng Part hoặc làm Full test theo thời gian TOEIC thật.',
-    },
-    {
       href: '/ets-practice',
       icon: FileText,
       label: 'Thi thử TOEIC',
@@ -1681,12 +1675,6 @@ function StudentMenuDashboard({
       icon: Compass,
       label: 'Giới thiệu bài thi TOEIC',
       text: 'Nắm cấu trúc 2 bài thi, từng Part/Task, cách phân bổ thời gian, mẹo làm bài và lỗi cần tránh.',
-    },
-    {
-      href: '/toeic-practice',
-      icon: PlayCircle,
-      label: 'Ôn luyện bài thi mẫu TOEIC',
-      text: 'Chọn đề mô phỏng TOEIC, làm từng Part hoặc Full test với đồng hồ, đáp án và giải thích.',
     },
     {
       href: '/ets-practice',
