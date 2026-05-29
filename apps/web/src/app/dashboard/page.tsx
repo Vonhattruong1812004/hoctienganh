@@ -13,7 +13,6 @@ import {
   FileText,
   Flame,
   Gamepad2,
-  Headphones,
   Heart,
   LibraryBig,
   LockKeyhole,
@@ -1706,23 +1705,31 @@ function StudentMenuDashboard({
             <h2>Chọn luồng học TOEIC</h2>
           </div>
 
-          <div className="studentToeicScene" aria-hidden="true">
-            <span className="studentToeicCard studentToeicCardOne">
-              <BookOpen size={20} />
-              <b>Vocabulary</b>
-            </span>
-            <span className="studentToeicCard studentToeicCardTwo">
-              <Headphones size={20} />
-              <b>Listening</b>
-            </span>
-            <span className="studentToeicCard studentToeicCardThree">
-              <ClipboardCheck size={20} />
-              <b>Grammar</b>
-            </span>
-            <span className="studentToeicOrbit" />
-            <span className="studentToeicTimer">120</span>
-            <span className="studentToeicWave studentToeicWaveOne" />
-            <span className="studentToeicWave studentToeicWaveTwo" />
+          <div className="adminPixelScene studentZooPixelScene" aria-hidden="true">
+            <span className="pixelSun" />
+            <span className="pixelCloud pixelCloudOne" />
+            <span className="pixelCloud pixelCloudTwo" />
+            <span className="pixelCloud pixelCloudThree" />
+            <span className="pixelBird pixelBirdOne" />
+            <span className="pixelBird pixelBirdTwo" />
+            <span className="pixelTree pixelTreeOne" />
+            <span className="pixelTree pixelTreeTwo" />
+            <span className="pixelTree pixelTreeThree" />
+            <span className="pixelBush pixelBushOne" />
+            <span className="pixelBush pixelBushTwo" />
+            <span className="pixelBush pixelBushThree" />
+            <span className="pixelFlower pixelFlowerOne" />
+            <span className="pixelFlower pixelFlowerTwo" />
+            <span className="pixelFlower pixelFlowerThree" />
+            <span className="pixelButterfly pixelButterflyOne" />
+            <span className="pixelButterfly pixelButterflyTwo" />
+            <span className="pixelBee" />
+            <span className="pixelAnimal pixelCat" />
+            <span className="pixelAnimal pixelPenguin" />
+            <span className="pixelAnimal pixelRabbit" />
+            <span className="pixelGrass pixelGrassOne" />
+            <span className="pixelGrass pixelGrassTwo" />
+            <span className="pixelGrass pixelGrassThree" />
           </div>
         </div>
 
