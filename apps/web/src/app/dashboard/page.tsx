@@ -1094,16 +1094,7 @@ export default function DashboardPage() {
 
   if (currentRole === USER_ROLES.STUDENT) {
     return (
-      <StudentMenuDashboard
-        session={session}
-        learningPath={learningPath}
-        lessons={studentLessons}
-        progress={studentProgress}
-        gameDashboard={gameDashboard}
-        averageProgress={averageProgress}
-        completedCount={completedCount}
-        bestScore={bestScore}
-      />
+      <StudentMenuDashboard session={session} />
     );
   }
 
@@ -1668,54 +1659,9 @@ function ContentHubSpotlight({ compact = false }: { compact?: boolean }) {
 
 function StudentMenuDashboard({
   session,
-  learningPath,
-  lessons,
-  progress,
-  gameDashboard,
-  averageProgress,
-  completedCount,
-  bestScore,
 }: {
   session: WebAuthSession;
-  learningPath: LearningPathDetail | null;
-  lessons: Array<LearningPathDetail['stages'][number]['lessons'][number] & { stageName: string; stageOrder: number }>;
-  progress: StudentProgressRow[];
-  gameDashboard: GameDashboard | null;
-  averageProgress: number;
-  completedCount: number;
-  bestScore: number;
 }) {
-  const progressByLesson = useMemo(
-    () =>
-      new Map(
-        progress.map((item) => [
-          item.lessonId,
-          {
-            ...item,
-            percentComplete: Number(item.percentComplete ?? 0),
-            bestScore: Number(item.bestScore ?? 0),
-          },
-        ]),
-      ),
-    [progress],
-  );
-
-  const firstOpenLesson = useMemo(
-    () =>
-      lessons.find((lesson) => {
-        const progressRow = progressByLesson.get(lesson.id);
-        const isFirstLesson = lesson.stageOrder === 1 && lesson.orderIndex === 1;
-        const status = progressRow?.status ?? (isFirstLesson ? 'ChuaHoc' : 'BiKhoa');
-
-        return status !== 'BiKhoa' && status !== 'HoanThanh';
-      }) ??
-      lessons.find((lesson) => progressByLesson.get(lesson.id)?.status !== 'BiKhoa') ??
-      lessons[0] ??
-      null,
-    [lessons, progressByLesson],
-  );
-
-  const pet = gameDashboard?.pet ?? null;
   const studentUseCaseItems = [
     {
       href: '/lessons',
@@ -1768,69 +1714,14 @@ function StudentMenuDashboard({
         <div className="adminMenuHero studentMenuHero">
           <div className="adminMenuHeroCopy">
             <p className="eyebrow">Xin chào, {session.user.fullName}</p>
-            <h2>Học từ vựng, ngữ pháp TOEIC, thi thử và theo dõi tiến trình.</h2>
-            <p>
-              Dashboard học viên chỉ giữ các luồng chính: học từ vựng theo chủ đề, học ngữ pháp TOEIC, nắm cấu trúc
-              bài thi và theo dõi tiến trình. Audio, ví dụ, game, test, pet và gợi ý học tiếp đều nằm đúng luồng.
-            </p>
-            <div className="adminMenuChips" aria-hidden="true">
-              <span>
-                <BookOpen size={14} />
-                {learningPath?.level ?? 'A1'} Path
-              </span>
-              <span>
-                <Sparkles size={14} />
-                {averageProgress}% tiến độ
-              </span>
-              <span>
-                <Gamepad2 size={14} />
-                {pet ? `${pet.name} cấp ${pet.level}` : 'Pet Pingu'}
-              </span>
-            </div>
+            <h2>Chọn luồng học TOEIC</h2>
           </div>
 
-          <div className="studentMenuScene" aria-hidden="true">
-            <span className="studentSceneSun" />
-            <span className="studentSceneCloud studentSceneCloudOne" />
-            <span className="studentSceneCloud studentSceneCloudTwo" />
-            <span className="studentSceneHill studentSceneHillOne" />
-            <span className="studentSceneHill studentSceneHillTwo" />
-            <span className="studentSceneRail" />
-            <span className="studentSceneTree studentSceneTreeOne" />
-            <span className="studentSceneTree studentSceneTreeTwo" />
-            <span className="studentSceneMascot studentSceneRabbit" />
-            <span className="studentSceneMascot studentScenePingu" />
-            <span className="studentSceneMascot studentSceneTurtle" />
-            <span className="studentSceneLeaf studentSceneLeafOne" />
-            <span className="studentSceneLeaf studentSceneLeafTwo" />
-          </div>
-        </div>
-
-        <div className="studentMenuStats" aria-label="Tóm tắt học tập nhanh">
-          <div className="studentMenuStat">
-            <span>Chủ đề đang học</span>
-            <strong>{firstOpenLesson?.stageName ?? learningPath?.name ?? 'Chưa mở'}</strong>
-          </div>
-          <div className="studentMenuStat">
-            <span>Hoàn thành</span>
-            <strong>
-              {completedCount}/{lessons.length}
-            </strong>
-          </div>
-          <div className="studentMenuStat">
-            <span>Tiến độ</span>
-            <strong>{averageProgress}%</strong>
-          </div>
-          <div className="studentMenuStat">
-            <span>Điểm cao nhất</span>
-            <strong>{bestScore}%</strong>
-          </div>
         </div>
 
         <div className="sectionTitle adminMenuHeading">
           <div>
-            <h2>Nghiệp vụ chính của học viên</h2>
-            <span>Từ vựng, ngữ pháp TOEIC và tiến trình được tách rõ, không trộn giao diện chi tiết vào dashboard.</span>
+            <h2>Chọn chức năng học tập</h2>
           </div>
         </div>
 
@@ -1854,21 +1745,6 @@ function StudentMenuDashboard({
           })}
         </div>
 
-        <div className="studentLearningFlow" aria-label="Luồng học từ vựng">
-          {[
-            'Chọn chủ đề',
-            'Học từ bằng ảnh + audio',
-            'Hiểu qua ví dụ ngữ cảnh',
-            'Luyện nhanh',
-            'Game/test chủ đề',
-            'Lưu tiến trình',
-          ].map((step, index) => (
-            <div className="studentLearningStep" key={step}>
-              <span>{String(index + 1).padStart(2, '0')}</span>
-              <strong>{step}</strong>
-            </div>
-          ))}
-        </div>
       </section>
     </AppShell>
   );
