@@ -177,32 +177,6 @@ export function ZooAmbientLayer() {
 
   return (
     <div className="zooAmbientLayer" aria-hidden="true">
-      <div className="zooRails">
-        <span className="zooRail zooRailTop" />
-        <span className="zooRail zooRailRight" />
-        <span className="zooRail zooRailBottom" />
-        <span className="zooRail zooRailLeft" />
-      </div>
-
-      <div className="zooSky">
-        <span className="zooSun" />
-        <span className="zooCloud zooCloudOne" />
-        <span className="zooCloud zooCloudTwo" />
-        <span className="zooCloud zooCloudThree" />
-      </div>
-
-      <div className="zooWind">
-        {Array.from({ length: 9 }, (_, index) => (
-          <span className="zooLeaf" key={`leaf-${index}`} />
-        ))}
-      </div>
-
-      <div className="zooWaves">
-        <span />
-        <span />
-        <span />
-      </div>
-
       {animals.map((animal, index) => {
         const style = {
           '--zoo-x': `${animal.x}%`,
@@ -234,14 +208,7 @@ export function ZooAmbientLayer() {
           >
             <span className="zooAura" />
             <span className="zooShadow" />
-            <span className="zooDust zooDustOne" />
-            <span className="zooDust zooDustTwo" />
             <ZooCreature kind={animal.key} />
-            <span
-              className="zooSpeech"
-              data-meaning={animal.vietnameseName}
-              data-word={animal.englishWord}
-            />
           </button>
         );
       })}
