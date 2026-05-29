@@ -1705,43 +1705,8 @@ function StudentMenuDashboard({
             <h2>Chọn luồng học TOEIC</h2>
           </div>
 
-          <div className="adminPixelScene studentZooPixelScene" aria-hidden="true">
-            <img className="studentZooGif" src="/media/pixel-zoo.gif" alt="" />
-            <span className="studentZooGifShade" />
-            <span className="pixelSun" />
-            <span className="pixelCloud pixelCloudOne" />
-            <span className="pixelCloud pixelCloudTwo" />
-            <span className="pixelCloud pixelCloudThree" />
-            <span className="pixelBird pixelBirdOne" />
-            <span className="pixelBird pixelBirdTwo" />
-            <span className="pixelTree pixelTreeOne" />
-            <span className="pixelTree pixelTreeTwo" />
-            <span className="pixelTree pixelTreeThree" />
-            <span className="pixelBush pixelBushOne" />
-            <span className="pixelBush pixelBushTwo" />
-            <span className="pixelBush pixelBushThree" />
-            <span className="pixelFlower pixelFlowerOne" />
-            <span className="pixelFlower pixelFlowerTwo" />
-            <span className="pixelFlower pixelFlowerThree" />
-            <span className="pixelButterfly pixelButterflyOne" />
-            <span className="pixelButterfly pixelButterflyTwo" />
-            <span className="pixelBee" />
-            <span className="pixelCrystalGate" />
-            <span className="pixelGem pixelGemOne" />
-            <span className="pixelGem pixelGemTwo" />
-            <span className="pixelGem pixelGemThree" />
-            <span className="pixelSparkle pixelSparkleOne" />
-            <span className="pixelSparkle pixelSparkleTwo" />
-            <span className="pixelSparkle pixelSparkleThree" />
-            <span className="pixelAnimal pixelCat" />
-            <span className="pixelAnimal pixelPenguin" />
-            <span className="pixelAnimal pixelRabbit" />
-            <span className="pixelMonster pixelMonsterFlare" />
-            <span className="pixelMonster pixelMonsterLeaf" />
-            <span className="pixelMonster pixelMonsterAqua" />
-            <span className="pixelGrass pixelGrassOne" />
-            <span className="pixelGrass pixelGrassTwo" />
-            <span className="pixelGrass pixelGrassThree" />
+          <div className="studentPokemonScene" aria-hidden="true">
+            <img className="studentPokemonGif" src="/media/pixel-zoo.gif" alt="" />
           </div>
         </div>
 
