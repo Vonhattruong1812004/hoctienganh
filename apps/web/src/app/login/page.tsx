@@ -135,10 +135,6 @@ export default function LoginPage() {
         <div className="authCopy">
           <p className="eyebrow">Gamified English Platform</p>
           <h1>{title}</h1>
-          <p>
-            Vào hệ thống học tiếng Anh theo vai trò, nơi lộ trình, quiz, AI Content Hub, pet Pingu và
-            tiến trình học được gom thành một trải nghiệm sinh động.
-          </p>
         </div>
 
         <div className="authWorldCard" aria-label="Không gian học tập EnglishPro">
