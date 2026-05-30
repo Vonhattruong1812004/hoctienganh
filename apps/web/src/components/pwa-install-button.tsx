@@ -94,27 +94,20 @@ export function PwaInstallButton() {
 
 const styles = {
   wrap: {
-    position: 'fixed',
-    right: 'max(18px, env(safe-area-inset-right))',
-    top: 'max(92px, env(safe-area-inset-top))',
-    zIndex: 1000,
+    position: 'relative',
     display: 'inline-flex',
     flexDirection: 'column',
     alignItems: 'flex-end',
-    gap: 10,
+    flex: '0 0 auto',
   },
   button: {
-    minHeight: 48,
+    minHeight: 44,
     borderColor: 'rgba(14, 165, 233, 0.28)',
     background: 'linear-gradient(135deg, rgba(236, 253, 245, 0.98), rgba(224, 242, 254, 0.96))',
     color: '#075985',
-    boxShadow: '0 16px 34px rgba(14, 165, 233, 0.18)',
+    boxShadow: '0 10px 24px rgba(14, 165, 233, 0.14)',
   },
   state: {
-    position: 'fixed',
-    right: 'max(18px, env(safe-area-inset-right))',
-    top: 'max(92px, env(safe-area-inset-top))',
-    zIndex: 1000,
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -129,6 +122,10 @@ const styles = {
     boxShadow: '0 14px 30px rgba(15, 23, 42, 0.12)',
   },
   hint: {
+    position: 'absolute',
+    right: 0,
+    top: 'calc(100% + 10px)',
+    zIndex: 30,
     width: 'min(320px, 82vw)',
     padding: '12px 14px',
     border: '1px solid rgba(14, 165, 233, 0.22)',

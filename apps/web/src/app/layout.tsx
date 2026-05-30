@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
 import { BackNavigationButton } from '../components/back-navigation-button';
-import { PwaInstallButton } from '../components/pwa-install-button';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -48,7 +47,6 @@ export default function RootLayout({
           })();
         `}</Script>
         <BackNavigationButton />
-        <PwaInstallButton />
         {children}
       </body>
     </html>

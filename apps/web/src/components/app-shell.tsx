@@ -18,6 +18,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { USER_ROLES, type UserRole } from '@english-learning/shared';
 import { clearStoredSession, type WebAuthSession } from '../lib/session';
+import { PwaInstallButton } from './pwa-install-button';
 import { ThemeToggleButton } from './theme-toggle';
 
 type AppShellProps = {
@@ -171,6 +172,7 @@ export function AppShell({ session, active, roleContext, showSidebar, eyebrow, t
           </div>
           <div className="topbarActions">
             <ThemeToggleButton />
+            <PwaInstallButton />
             <button className="secondaryButton" type="button" onClick={handleLogout}>
               <LogOut size={18} />
               Đăng xuất
