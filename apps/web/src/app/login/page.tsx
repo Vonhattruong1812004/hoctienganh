@@ -10,7 +10,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { ThemeToggleButton } from '../../components/theme-toggle';
 import { apiPost } from '../../lib/api';
 import { getStoredSession, setStoredSession, type WebAuthSession } from '../../lib/session';
@@ -76,8 +76,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const title = useMemo(() => 'Đăng nhập vào EnglishPro', []);
-
   useEffect(() => {
     if (getStoredSession()) {
       router.replace('/dashboard');
@@ -126,11 +124,6 @@ export default function LoginPage() {
             </div>
           </div>
           <ThemeToggleButton />
-        </div>
-
-        <div className="authCopy">
-          <p className="eyebrow">Gamified English Platform</p>
-          <h1>{title}</h1>
         </div>
 
         <div className="authWorldCard" aria-label="Không gian học tập EnglishPro">
