@@ -2,15 +2,11 @@
 
 import {
   ArrowRight,
-  BookOpen,
   Eye,
   EyeOff,
-  Gamepad2,
   GraduationCap,
-  Languages,
   LockKeyhole,
   ShieldCheck,
-  Sparkles,
   Users,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -140,35 +136,6 @@ export default function LoginPage() {
         <div className="authWorldCard" aria-label="Không gian học tập EnglishPro">
           <div className="authWorldSky">
             <img className="authPokemonGif" src="/media/pokemon1.gif" alt="" />
-          </div>
-          <div className="authWorldStats">
-            <span>
-              <Languages size={16} />
-              Từ vựng
-            </span>
-            <span>
-              <BookOpen size={16} />
-              Bài học
-            </span>
-            <span>
-              <Gamepad2 size={16} />
-              Mini game
-            </span>
-          </div>
-        </div>
-
-        <div className="authHighlights">
-          <div>
-            <ShieldCheck size={18} />
-            <span>JWT + phân quyền theo actor</span>
-          </div>
-          <div>
-            <Sparkles size={18} />
-            <span>AI Content Hub đa nguồn</span>
-          </div>
-          <div>
-            <ArrowRight size={18} />
-            <span>Dashboard và chức năng tách riêng</span>
           </div>
         </div>
       </section>
