@@ -9,7 +9,11 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 };
 
-export function PwaInstallButton() {
+type PwaInstallButtonProps = {
+  variant?: 'default' | 'onImage';
+};
+
+export function PwaInstallButton({ variant = 'default' }: PwaInstallButtonProps) {
   const pathname = usePathname();
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
@@ -70,7 +74,7 @@ export function PwaInstallButton() {
 
   if (installed) {
     return (
-      <span style={styles.state} aria-label="Ứng dụng đã được cài">
+      <span style={variant === 'onImage' ? { ...styles.state, ...styles.onImageState } : styles.state} aria-label="Ứng dụng đã được cài">
         <MonitorSmartphone size={16} />
         App đã cài
       </span>
@@ -79,7 +83,12 @@ export function PwaInstallButton() {
 
   return (
     <span style={styles.wrap}>
-      <button className="secondaryButton" style={styles.button} type="button" onClick={() => void handleInstall()}>
+      <button
+        className="secondaryButton"
+        style={variant === 'onImage' ? { ...styles.button, ...styles.onImageButton } : styles.button}
+        type="button"
+        onClick={() => void handleInstall()}
+      >
         <Download size={16} />
         Tải app
       </button>
@@ -107,6 +116,12 @@ const styles = {
     color: '#075985',
     boxShadow: '0 10px 24px rgba(14, 165, 233, 0.14)',
   },
+  onImageButton: {
+    borderColor: 'rgba(255, 255, 255, 0.34)',
+    background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82), rgba(30, 64, 175, 0.78))',
+    color: '#f8fafc',
+    boxShadow: '0 14px 30px rgba(2, 6, 23, 0.22)',
+  },
   state: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -120,6 +135,11 @@ const styles = {
     color: '#166534',
     fontWeight: 900,
     boxShadow: '0 14px 30px rgba(15, 23, 42, 0.12)',
+  },
+  onImageState: {
+    borderColor: 'rgba(187, 247, 208, 0.46)',
+    background: 'rgba(20, 83, 45, 0.82)',
+    color: '#ecfdf5',
   },
   hint: {
     position: 'absolute',
