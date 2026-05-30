@@ -1,5 +1,5 @@
 const CACHE_NAME = 'englishpro-pwa-v1';
-const STATIC_ASSETS = ['/login', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
+const STATIC_ASSETS = ['/login', '/manifest.webmanifest', '/icons/pokeball-192.png', '/icons/pokeball-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
