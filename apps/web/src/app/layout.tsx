@@ -6,7 +6,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'EnglishPro Learning',
   description: 'English learning platform with paths, lessons, quizzes, and progress tracking.',
-  manifest: '/manifest.webmanifest',
+  manifest: '/manifest.webmanifest?v=pokeball',
   applicationName: 'EnglishPro TOEIC',
   appleWebApp: {
     capable: true,
@@ -15,10 +15,12 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: '/icons/pokeball-192.png', sizes: '192x192', type: 'image/png' },
-      { url: '/icons/pokeball-512.png', sizes: '512x512', type: 'image/png' },
+      { url: '/icon.png?v=pokeball', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/pokeball-192.png?v=pokeball', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/pokeball-512.png?v=pokeball', sizes: '512x512', type: 'image/png' },
     ],
-    apple: [{ url: '/icons/pokeball-192.png', sizes: '192x192', type: 'image/png' }],
+    shortcut: ['/icon.png?v=pokeball'],
+    apple: [{ url: '/apple-icon.png?v=pokeball', sizes: '180x180', type: 'image/png' }],
   },
 };
 
